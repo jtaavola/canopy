@@ -1,7 +1,8 @@
 import os from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell, type WebFrameMain } from "electron";
 import * as pty from "node-pty";
 import icon from "../../resources/icon.png?asset";
 
@@ -35,10 +36,39 @@ function normalizeTerminalDimension(value: unknown, fallback: number): number {
   return Math.max(1, Math.floor(value));
 }
 
+function validateSender(frame: WebFrameMain | null): boolean {
+  if (!frame) return false;
+
+  const trustedUrls = [
+    ...(is.dev && process.env.ELECTRON_RENDERER_URL
+      ? [new URL(process.env.ELECTRON_RENDERER_URL)]
+      : []),
+    pathToFileURL(join(__dirname, "../renderer/index.html")),
+  ];
+
+  try {
+    const senderUrl = new URL(frame.url);
+
+    return trustedUrls.some((trustedUrl) => {
+      if (senderUrl.protocol !== trustedUrl.protocol) return false;
+
+      if (senderUrl.protocol === "file:") {
+        return senderUrl.href === trustedUrl.href;
+      }
+
+      return senderUrl.origin === trustedUrl.origin;
+    });
+  } catch {
+    return false;
+  }
+}
+
 function registerTerminalIpc(): void {
   ipcMain.handle(
     "terminal:start",
     (event, options?: { cols?: unknown; rows?: unknown }) => {
+      if (!validateSender(event.senderFrame)) return;
+
       const webContentsId = event.sender.id;
 
       cleanupTerminal(webContentsId);
@@ -71,12 +101,16 @@ function registerTerminalIpc(): void {
   );
 
   ipcMain.on("terminal:write", (event, data: string) => {
+    if (!validateSender(event.senderFrame)) return;
+
     terminals.get(event.sender.id)?.write(data);
   });
 
   ipcMain.on(
     "terminal:resize",
     (event, size?: { cols?: unknown; rows?: unknown }) => {
+      if (!validateSender(event.senderFrame)) return;
+
       const terminal = terminals.get(event.sender.id);
 
       if (!terminal) return;
@@ -89,6 +123,8 @@ function registerTerminalIpc(): void {
   );
 
   ipcMain.on("terminal:dispose", (event) => {
+    if (!validateSender(event.senderFrame)) return;
+
     cleanupTerminal(event.sender.id);
   });
 }
