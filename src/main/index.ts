@@ -1,7 +1,133 @@
+import os from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell, type WebFrameMain } from "electron";
+import * as pty from "node-pty";
 import icon from "../../resources/icon.png?asset";
+
+const terminals = new Map<number, pty.IPty>();
+
+function getShell(): string {
+  if (process.platform === "win32") {
+    return process.env.ComSpec ?? "powershell.exe";
+  }
+
+  return (
+    process.env.SHELL ??
+    (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash")
+  );
+}
+
+function cleanupTerminal(webContentsId: number): void {
+  const terminal = terminals.get(webContentsId);
+
+  if (!terminal) return;
+
+  terminal.kill();
+  terminals.delete(webContentsId);
+}
+
+function normalizeTerminalDimension(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.floor(value));
+}
+
+function validateSender(frame: WebFrameMain | null): boolean {
+  if (!frame) return false;
+
+  const trustedUrls = [
+    ...(is.dev && process.env.ELECTRON_RENDERER_URL
+      ? [new URL(process.env.ELECTRON_RENDERER_URL)]
+      : []),
+    pathToFileURL(join(__dirname, "../renderer/index.html")),
+  ];
+
+  try {
+    const senderUrl = new URL(frame.url);
+
+    return trustedUrls.some((trustedUrl) => {
+      if (senderUrl.protocol !== trustedUrl.protocol) return false;
+
+      if (senderUrl.protocol === "file:") {
+        return senderUrl.href === trustedUrl.href;
+      }
+
+      return senderUrl.origin === trustedUrl.origin;
+    });
+  } catch {
+    return false;
+  }
+}
+
+function registerTerminalIpc(): void {
+  ipcMain.handle(
+    "terminal:start",
+    (event, options?: { cols?: unknown; rows?: unknown }) => {
+      if (!validateSender(event.senderFrame)) return;
+
+      const webContentsId = event.sender.id;
+
+      cleanupTerminal(webContentsId);
+
+      const shellPath = getShell();
+      const terminal = pty.spawn(shellPath, [], {
+        name: "xterm-256color",
+        cols: normalizeTerminalDimension(options?.cols, 80),
+        rows: normalizeTerminalDimension(options?.rows, 24),
+        cwd: os.homedir(),
+        env: process.env,
+      });
+
+      terminals.set(webContentsId, terminal);
+
+      terminal.onData((data) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("terminal:data", data);
+        }
+      });
+
+      terminal.onExit(({ exitCode, signal }) => {
+        terminals.delete(webContentsId);
+
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("terminal:exit", { exitCode, signal });
+        }
+      });
+    },
+  );
+
+  ipcMain.on("terminal:write", (event, data: string) => {
+    if (!validateSender(event.senderFrame)) return;
+
+    terminals.get(event.sender.id)?.write(data);
+  });
+
+  ipcMain.on(
+    "terminal:resize",
+    (event, size?: { cols?: unknown; rows?: unknown }) => {
+      if (!validateSender(event.senderFrame)) return;
+
+      const terminal = terminals.get(event.sender.id);
+
+      if (!terminal) return;
+
+      const cols = normalizeTerminalDimension(size?.cols, terminal.cols);
+      const rows = normalizeTerminalDimension(size?.rows, terminal.rows);
+
+      terminal.resize(cols, rows);
+    },
+  );
+
+  ipcMain.on("terminal:dispose", (event) => {
+    if (!validateSender(event.senderFrame)) return;
+
+    cleanupTerminal(event.sender.id);
+  });
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -15,6 +141,10 @@ function createWindow(): void {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: false,
     },
+  });
+
+  mainWindow.on("closed", () => {
+    cleanupTerminal(mainWindow.webContents.id);
   });
 
   mainWindow.on("ready-to-show", () => {
@@ -49,8 +179,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window);
   });
 
-  // IPC test
-  ipcMain.on("ping", () => console.log("pong"));
+  registerTerminalIpc();
 
   createWindow();
 
