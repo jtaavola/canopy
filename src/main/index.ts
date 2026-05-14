@@ -1,5 +1,6 @@
+import { readdir } from "node:fs/promises";
 import os from "node:os";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import {
@@ -13,6 +14,41 @@ import * as pty from "node-pty";
 import icon from "../../resources/icon.png?asset";
 
 const terminals = new Map<number, pty.IPty>();
+
+const EXCLUDED_TREE_ENTRIES = new Set([
+  ".git",
+  "build",
+  "dist",
+  "node_modules",
+  "out",
+]);
+
+async function collectProjectPaths(rootPath: string): Promise<string[]> {
+  const paths: string[] = [];
+
+  async function walk(directoryPath: string): Promise<void> {
+    const entries = await readdir(directoryPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (EXCLUDED_TREE_ENTRIES.has(entry.name)) continue;
+
+      const absolutePath = join(directoryPath, entry.name);
+
+      if (entry.isDirectory()) {
+        await walk(absolutePath);
+        continue;
+      }
+
+      if (entry.isFile()) {
+        paths.push(relative(rootPath, absolutePath).split(sep).join("/"));
+      }
+    }
+  }
+
+  await walk(rootPath);
+
+  return paths.sort((a, b) => a.localeCompare(b));
+}
 
 function getShell(): string {
   if (process.platform === "win32") {
@@ -67,6 +103,14 @@ function validateSender(frame: WebFrameMain | null): boolean {
   } catch {
     return false;
   }
+}
+
+function registerFileTreeIpc(): void {
+  ipcMain.handle("file-tree:list", async (event) => {
+    if (!validateSender(event.senderFrame)) return [];
+
+    return collectProjectPaths(process.cwd());
+  });
 }
 
 function registerTerminalIpc(): void {
@@ -188,6 +232,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window);
   });
 
+  registerFileTreeIpc();
   registerTerminalIpc();
 
   createWindow();

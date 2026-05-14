@@ -39,11 +39,58 @@ body {
   letter-spacing: 0.01em;
 }
 
+.workspace-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: #111111;
+}
+
 .terminal-shell {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   padding: 8px;
   background: #111111;
+}
+
+.explorer-panel {
+  flex: 0 0 280px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #2a2a2a;
+  background: #151515;
+}
+
+.explorer-header {
+  flex: 0 0 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid #2a2a2a;
+  color: rgba(242, 242, 242, 0.72);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.explorer-error {
+  padding: 8px 12px;
+  color: #ff8a8a;
+  font-size: 12px;
+}
+
+.explorer-tree {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  --trees-theme-background: #151515;
+  --trees-theme-foreground: #d4d4d4;
+  --trees-theme-list-hover-bg: #232323;
+  --trees-theme-list-active-selection-bg: #264f78;
+  --trees-theme-focus-ring: #3b82f6;
 }
 
 .terminal-container {
