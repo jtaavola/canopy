@@ -1,7 +1,85 @@
+import os from "node:os";
 import { join } from "node:path";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
+import * as pty from "node-pty";
 import icon from "../../resources/icon.png?asset";
+
+const terminals = new Map<number, pty.IPty>();
+
+function getShell(): string {
+  if (process.platform === "win32") {
+    return process.env.ComSpec ?? "powershell.exe";
+  }
+
+  return (
+    process.env.SHELL ??
+    (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash")
+  );
+}
+
+function cleanupTerminal(webContentsId: number): void {
+  const terminal = terminals.get(webContentsId);
+
+  if (!terminal) return;
+
+  terminal.kill();
+  terminals.delete(webContentsId);
+}
+
+function registerTerminalIpc(): void {
+  ipcMain.handle(
+    "terminal:start",
+    (event, options?: { cols?: number; rows?: number }) => {
+      const webContentsId = event.sender.id;
+
+      cleanupTerminal(webContentsId);
+
+      const shellPath = getShell();
+      const terminal = pty.spawn(shellPath, [], {
+        name: "xterm-256color",
+        cols: options?.cols ?? 80,
+        rows: options?.rows ?? 24,
+        cwd: os.homedir(),
+        env: process.env,
+      });
+
+      terminals.set(webContentsId, terminal);
+
+      terminal.onData((data) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("terminal:data", data);
+        }
+      });
+
+      terminal.onExit(({ exitCode, signal }) => {
+        terminals.delete(webContentsId);
+
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("terminal:exit", { exitCode, signal });
+        }
+      });
+    },
+  );
+
+  ipcMain.on("terminal:write", (event, data: string) => {
+    terminals.get(event.sender.id)?.write(data);
+  });
+
+  ipcMain.on(
+    "terminal:resize",
+    (event, size: { cols: number; rows: number }) => {
+      const cols = Math.max(1, Math.floor(size.cols));
+      const rows = Math.max(1, Math.floor(size.rows));
+
+      terminals.get(event.sender.id)?.resize(cols, rows);
+    },
+  );
+
+  ipcMain.on("terminal:dispose", (event) => {
+    cleanupTerminal(event.sender.id);
+  });
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -15,6 +93,10 @@ function createWindow(): void {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: false,
     },
+  });
+
+  mainWindow.on("closed", () => {
+    cleanupTerminal(mainWindow.webContents.id);
   });
 
   mainWindow.on("ready-to-show", () => {
@@ -49,8 +131,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window);
   });
 
-  // IPC test
-  ipcMain.on("ping", () => console.log("pong"));
+  registerTerminalIpc();
 
   createWindow();
 
