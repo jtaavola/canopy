@@ -2,7 +2,13 @@ import os from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
-import { app, BrowserWindow, ipcMain, shell, type WebFrameMain } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  type WebFrameMain,
+} from "electron";
 import * as pty from "node-pty";
 import icon from "../../resources/icon.png?asset";
 
@@ -136,6 +142,9 @@ function createWindow(): void {
     height: 670,
     show: false,
     autoHideMenuBar: true,
+    frame: false,
+    titleBarStyle: "hidden",
+    trafficLightPosition: { x: 16, y: 16 },
     ...(process.platform === "linux" ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),

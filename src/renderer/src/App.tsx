@@ -57,8 +57,13 @@ function App(): React.JSX.Element {
   }, []);
 
   return (
-    <main className="terminal-shell">
-      <div ref={terminalElementRef} className="terminal-container" />
+    <main className="app-shell">
+      <header className="app-header">
+        <div className="app-title">Canopy</div>
+      </header>
+      <section className="terminal-shell" aria-label="Terminal">
+        <div ref={terminalElementRef} className="terminal-container" />
+      </section>
     </main>
   );
 }
