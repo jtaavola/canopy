@@ -1,11 +1,11 @@
-@import './base.css';
+@import "./base.css";
 
 body {
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background-image: url('./wavy-lines.svg');
+  background-image: url("./wavy-lines.svg");
   background-size: cover;
   user-select: none;
 }
@@ -101,7 +101,8 @@ code {
   padding: 6px;
 }
 
-.action a {
+.action a,
+.action button {
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
@@ -116,9 +117,11 @@ code {
   border-color: var(--ev-button-alt-border);
   color: var(--ev-button-alt-text);
   background-color: var(--ev-button-alt-bg);
+  font-family: inherit;
 }
 
-.action a:hover {
+.action a:hover,
+.action button:hover {
   border-color: var(--ev-button-alt-hover-border);
   color: var(--ev-button-alt-hover-text);
   background-color: var(--ev-button-alt-hover-bg);
@@ -129,7 +132,7 @@ code {
   bottom: 30px;
   margin: 0 auto;
   padding: 15px 0;
-  font-family: 'Menlo', 'Lucida Console', monospace;
+  font-family: "Menlo", "Lucida Console", monospace;
   display: inline-flex;
   overflow: hidden;
   align-items: center;
