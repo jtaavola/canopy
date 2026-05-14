@@ -1,7 +1,52 @@
+import { FileTree, useFileTree } from "@pierre/trees/react";
 import { FitAddon } from "@xterm/addon-fit";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
+
+function ProjectExplorer(): React.JSX.Element {
+  const [paths, setPaths] = useState<readonly string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const { model } = useFileTree({
+    paths,
+    search: true,
+    fileTreeSearchMode: "hide-non-matches",
+    flattenEmptyDirectories: true,
+    initialExpandedPaths: ["src", "src/renderer", "src/renderer/src"],
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    window.api.fileTree
+      .list()
+      .then((projectPaths) => {
+        if (!isMounted) return;
+        setPaths(projectPaths);
+        model.resetPaths(projectPaths);
+      })
+      .catch((unknownError: unknown) => {
+        if (!isMounted) return;
+        setError(
+          unknownError instanceof Error
+            ? unknownError.message
+            : "Unable to load project files",
+        );
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [model]);
+
+  return (
+    <aside className="explorer-panel" aria-label="Project file explorer">
+      <div className="explorer-header">Files</div>
+      {error ? <div className="explorer-error">{error}</div> : null}
+      <FileTree model={model} className="explorer-tree" />
+    </aside>
+  );
+}
 
 function App(): React.JSX.Element {
   const terminalElementRef = useRef<HTMLDivElement>(null);
@@ -61,9 +106,12 @@ function App(): React.JSX.Element {
       <header className="app-header">
         <div className="app-title">Canopy</div>
       </header>
-      <section className="terminal-shell" aria-label="Terminal">
-        <div ref={terminalElementRef} className="terminal-container" />
-      </section>
+      <div className="workspace-shell">
+        <section className="terminal-shell" aria-label="Terminal">
+          <div ref={terminalElementRef} className="terminal-container" />
+        </section>
+        <ProjectExplorer />
+      </div>
     </main>
   );
 }

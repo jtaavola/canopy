@@ -3,6 +3,9 @@ import { contextBridge, ipcRenderer } from "electron";
 
 // Custom APIs for renderer
 const api = {
+  fileTree: {
+    list: () => ipcRenderer.invoke("file-tree:list") as Promise<string[]>,
+  },
   terminal: {
     start: (size: { cols: number; rows: number }) =>
       ipcRenderer.invoke("terminal:start", size),
