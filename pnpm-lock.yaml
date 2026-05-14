@@ -18,8 +18,8 @@ importers:
         specifier: ^0.11.0
         version: 0.11.0
       node-pty:
-        specifier: 1.1.0
-        version: 1.1.0
+        specifier: 1.2.0-beta.13
+        version: 1.2.0-beta.13
       xterm:
         specifier: ^5.3.0
         version: 5.3.0
@@ -1507,8 +1507,8 @@ packages:
     engines: {node: ^20.17.0 || >=22.9.0}
     hasBin: true
 
-  node-pty@1.1.0:
-    resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
+  node-pty@1.2.0-beta.13:
+    resolution: {integrity: sha512-ZbbJ7aJdmvRA53bw30D6YSJJKqo1IXTojD0kJeHZ/xZIxr7p1DCmvOmrOnjUo/rn1z4MDwKQGpx0C7K+cRKETw==}
 
   node-releases@2.0.44:
     resolution: {integrity: sha512-5WUyunoPMsvvEhS8AxHtRzP+oA8UCkJ7YRxatWKjngndhDGLiqEVAQKWjFAiAiuL8zMRGzGSJxFnLetoa43qGQ==}
@@ -3383,7 +3383,7 @@ snapshots:
       undici: 6.25.0
       which: 6.0.1
 
-  node-pty@1.1.0:
+  node-pty@1.2.0-beta.13:
     dependencies:
       node-addon-api: 7.1.1
 
