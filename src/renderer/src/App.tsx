@@ -40,7 +40,11 @@ function ProjectExplorer(): React.JSX.Element {
   }, [model]);
 
   return (
-    <aside className="explorer-panel" aria-label="Project file explorer">
+    <aside
+      id="project-explorer"
+      className="explorer-panel"
+      aria-label="Project file explorer"
+    >
       <div className="explorer-header">Files</div>
       {error ? <div className="explorer-error">{error}</div> : null}
       <FileTree model={model} className="explorer-tree" />
@@ -50,6 +54,7 @@ function ProjectExplorer(): React.JSX.Element {
 
 function App(): React.JSX.Element {
   const terminalElementRef = useRef<HTMLDivElement>(null);
+  const [isExplorerVisible, setIsExplorerVisible] = useState(true);
 
   useEffect(() => {
     const terminalElement = terminalElementRef.current;
@@ -105,12 +110,21 @@ function App(): React.JSX.Element {
     <main className="app-shell">
       <header className="app-header">
         <div className="app-title">Canopy</div>
+        <button
+          type="button"
+          className="explorer-toggle"
+          aria-controls="project-explorer"
+          aria-expanded={isExplorerVisible}
+          onClick={() => setIsExplorerVisible((isVisible) => !isVisible)}
+        >
+          {isExplorerVisible ? "Hide files" : "Show files"}
+        </button>
       </header>
       <div className="workspace-shell">
         <section className="terminal-shell" aria-label="Terminal">
           <div ref={terminalElementRef} className="terminal-container" />
         </section>
-        <ProjectExplorer />
+        {isExplorerVisible ? <ProjectExplorer /> : null}
       </div>
     </main>
   );
