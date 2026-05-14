@@ -12,7 +12,6 @@ function ProjectExplorer(): React.JSX.Element {
     search: true,
     fileTreeSearchMode: "hide-non-matches",
     flattenEmptyDirectories: true,
-    icons: "standard",
     initialExpandedPaths: ["src", "src/renderer", "src/renderer/src"],
   });
 

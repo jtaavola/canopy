@@ -86,11 +86,7 @@ body {
   flex: 1;
   min-height: 0;
   height: 100%;
-  --trees-theme-background: #151515;
-  --trees-theme-foreground: #d4d4d4;
-  --trees-theme-list-hover-bg: #232323;
-  --trees-theme-list-active-selection-bg: #264f78;
-  --trees-theme-focus-ring: #3b82f6;
+
 }
 
 .terminal-container {
