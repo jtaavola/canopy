@@ -27,10 +27,18 @@ function cleanupTerminal(webContentsId: number): void {
   terminals.delete(webContentsId);
 }
 
+function normalizeTerminalDimension(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.floor(value));
+}
+
 function registerTerminalIpc(): void {
   ipcMain.handle(
     "terminal:start",
-    (event, options?: { cols?: number; rows?: number }) => {
+    (event, options?: { cols?: unknown; rows?: unknown }) => {
       const webContentsId = event.sender.id;
 
       cleanupTerminal(webContentsId);
@@ -38,8 +46,8 @@ function registerTerminalIpc(): void {
       const shellPath = getShell();
       const terminal = pty.spawn(shellPath, [], {
         name: "xterm-256color",
-        cols: options?.cols ?? 80,
-        rows: options?.rows ?? 24,
+        cols: normalizeTerminalDimension(options?.cols, 80),
+        rows: normalizeTerminalDimension(options?.rows, 24),
         cwd: os.homedir(),
         env: process.env,
       });
@@ -68,11 +76,15 @@ function registerTerminalIpc(): void {
 
   ipcMain.on(
     "terminal:resize",
-    (event, size: { cols: number; rows: number }) => {
-      const cols = Math.max(1, Math.floor(size.cols));
-      const rows = Math.max(1, Math.floor(size.rows));
+    (event, size?: { cols?: unknown; rows?: unknown }) => {
+      const terminal = terminals.get(event.sender.id);
 
-      terminals.get(event.sender.id)?.resize(cols, rows);
+      if (!terminal) return;
+
+      const cols = normalizeTerminalDimension(size?.cols, terminal.cols);
+      const rows = normalizeTerminalDimension(size?.rows, terminal.rows);
+
+      terminal.resize(cols, rows);
     },
   );
 
