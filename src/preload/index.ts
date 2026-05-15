@@ -3,12 +3,16 @@ import { contextBridge, ipcRenderer } from "electron";
 
 // Custom APIs for renderer
 const api = {
+  project: {
+    open: () => ipcRenderer.invoke("project:open") as Promise<string | null>,
+  },
   fileTree: {
-    list: () => ipcRenderer.invoke("file-tree:list") as Promise<string[]>,
+    list: (rootPath: string) =>
+      ipcRenderer.invoke("file-tree:list", rootPath) as Promise<string[]>,
   },
   terminal: {
-    start: (size: { cols: number; rows: number }) =>
-      ipcRenderer.invoke("terminal:start", size),
+    start: (options: { cols: number; rows: number; cwd: string }) =>
+      ipcRenderer.invoke("terminal:start", options),
     write: (data: string) => ipcRenderer.send("terminal:write", data),
     resize: (size: { cols: number; rows: number }) =>
       ipcRenderer.send("terminal:resize", size),
