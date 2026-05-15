@@ -24,7 +24,7 @@ function ProjectsLanding({
       <div className="w-full max-w-lg -translate-y-8">
         <div className="mb-12 flex flex-col items-center text-center">
           <img src={canopyLogo} alt="" className="mb-3 size-12" />
-          <h1 className="text-5xl">Canopy</h1>
+          <h1 className="text-5xl font-light uppercase tracking-widest">Canopy</h1>
         </div>
         <Button
           type="button"
