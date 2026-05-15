@@ -3,13 +3,14 @@ import { IconLayoutSidebarRight } from "@tabler/icons-react";
 import { FitAddon } from "@xterm/addon-fit";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
+import canopyLogo from "../../../resources/icon.png";
 import "xterm/css/xterm.css";
 
 function getProjectName(projectPath: string): string {
   return projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? projectPath;
 }
 
-function LandingPage({
+function ProjectsLanding({
   onOpenProject,
   isOpening,
   error,
@@ -19,25 +20,30 @@ function LandingPage({
   error: string | null;
 }): React.JSX.Element {
   return (
-    <main className="app-shell landing-shell">
-      <section className="landing-card" aria-labelledby="landing-title">
-        <div className="landing-kicker">Canopy</div>
-        <h1 id="landing-title">Open a project to get started</h1>
-        <p>
-          Choose a project folder and Canopy will root your files and terminal
-          there.
-        </p>
+    <section className="projects-landing" aria-labelledby="projects-title">
+      <div className="projects-panel">
+        <div className="projects-heading">
+          <img src={canopyLogo} alt="" className="projects-logo" />
+          <div className="projects-brand-name">Canopy</div>
+          <h1 id="projects-title">Projects</h1>
+          <p>Open a folder to start working in Canopy.</p>
+        </div>
         <button
           type="button"
-          className="primary-action"
+          className="project-row"
           onClick={onOpenProject}
           disabled={isOpening}
         >
-          {isOpening ? "Opening…" : "Open project"}
+          <span className="project-row-title">
+            {isOpening ? "Opening…" : "Open project…"}
+          </span>
+          <span className="project-row-description">
+            Select a local folder as your workspace
+          </span>
         </button>
         {error ? <div className="landing-error">{error}</div> : null}
-      </section>
-    </main>
+      </div>
+    </section>
   );
 }
 
@@ -179,39 +185,43 @@ function App(): React.JSX.Element {
     }
   };
 
-  if (!projectPath) {
-    return (
-      <LandingPage
-        onOpenProject={openProject}
-        isOpening={isOpeningProject}
-        error={openProjectError}
-      />
-    );
-  }
-
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div className="app-title">Canopy · {getProjectName(projectPath)}</div>
-        <button
-          type="button"
-          className="explorer-toggle"
-          aria-controls="project-explorer"
-          aria-expanded={isExplorerVisible}
-          aria-label={isExplorerVisible ? "Hide files" : "Show files"}
-          title={isExplorerVisible ? "Hide files" : "Show files"}
-          onClick={() => setIsExplorerVisible((isVisible) => !isVisible)}
-        >
-          <IconLayoutSidebarRight aria-hidden="true" size={18} stroke={1.8} />
-        </button>
+        <div className="app-title">
+          Canopy{projectPath ? ` · ${getProjectName(projectPath)}` : ""}
+        </div>
+        {projectPath ? (
+          <button
+            type="button"
+            className="explorer-toggle"
+            aria-controls="project-explorer"
+            aria-expanded={isExplorerVisible}
+            aria-label={isExplorerVisible ? "Hide files" : "Show files"}
+            title={isExplorerVisible ? "Hide files" : "Show files"}
+            onClick={() => setIsExplorerVisible((isVisible) => !isVisible)}
+          >
+            <IconLayoutSidebarRight aria-hidden="true" size={18} stroke={1.8} />
+          </button>
+        ) : null}
       </header>
       <div className="workspace-shell">
-        <section className="terminal-shell" aria-label="Terminal">
-          <div ref={terminalElementRef} className="terminal-container" />
-        </section>
-        {isExplorerVisible ? (
-          <ProjectExplorer projectPath={projectPath} />
-        ) : null}
+        {projectPath ? (
+          <>
+            <section className="terminal-shell" aria-label="Terminal">
+              <div ref={terminalElementRef} className="terminal-container" />
+            </section>
+            {isExplorerVisible ? (
+              <ProjectExplorer projectPath={projectPath} />
+            ) : null}
+          </>
+        ) : (
+          <ProjectsLanding
+            onOpenProject={openProject}
+            isOpening={isOpeningProject}
+            error={openProjectError}
+          />
+        )}
       </div>
     </main>
   );
