@@ -19,6 +19,19 @@ If the Linear CLI command syntax is unclear, inspect `linear --help` before taki
 
 ## Helpful commands
 
+Create an issue non-interactively. Prefer `--description-file` for markdown bodies so quoting does not get mangled:
+
+```sh
+linear issue create \
+  --team JTA \
+  --title "Example issue title" \
+  --description-file /tmp/canopy-issue.md \
+  --label label-1 \
+  --label label-2 \
+  --label label-3 \
+  --no-interactive
+```
+
 Start work on an issue. This creates/switches to a branch and moves the issue to In Progress:
 
 ```sh
