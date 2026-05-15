@@ -5,7 +5,47 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
 
-function ProjectExplorer(): React.JSX.Element {
+function getProjectName(projectPath: string): string {
+  return projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? projectPath;
+}
+
+function LandingPage({
+  onOpenProject,
+  isOpening,
+  error,
+}: {
+  onOpenProject: () => void;
+  isOpening: boolean;
+  error: string | null;
+}): React.JSX.Element {
+  return (
+    <main className="app-shell landing-shell">
+      <section className="landing-card" aria-labelledby="landing-title">
+        <div className="landing-kicker">Canopy</div>
+        <h1 id="landing-title">Open a project to get started</h1>
+        <p>
+          Choose a project folder and Canopy will root your files and terminal
+          there.
+        </p>
+        <button
+          type="button"
+          className="primary-action"
+          onClick={onOpenProject}
+          disabled={isOpening}
+        >
+          {isOpening ? "Opening…" : "Open project"}
+        </button>
+        {error ? <div className="landing-error">{error}</div> : null}
+      </section>
+    </main>
+  );
+}
+
+function ProjectExplorer({
+  projectPath,
+}: {
+  projectPath: string;
+}): React.JSX.Element {
   const [paths, setPaths] = useState<readonly string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { model } = useFileTree({
@@ -19,8 +59,10 @@ function ProjectExplorer(): React.JSX.Element {
   useEffect(() => {
     let isMounted = true;
 
+    setError(null);
+
     window.api.fileTree
-      .list()
+      .list(projectPath)
       .then((projectPaths) => {
         if (!isMounted) return;
         setPaths(projectPaths);
@@ -38,7 +80,7 @@ function ProjectExplorer(): React.JSX.Element {
     return () => {
       isMounted = false;
     };
-  }, [model]);
+  }, [model, projectPath]);
 
   return (
     <aside
@@ -46,7 +88,9 @@ function ProjectExplorer(): React.JSX.Element {
       className="explorer-panel"
       aria-label="Project file explorer"
     >
-      <div className="explorer-header">Files</div>
+      <div className="explorer-header">
+        Files · {getProjectName(projectPath)}
+      </div>
       {error ? <div className="explorer-error">{error}</div> : null}
       <FileTree model={model} className="explorer-tree" />
     </aside>
@@ -55,12 +99,15 @@ function ProjectExplorer(): React.JSX.Element {
 
 function App(): React.JSX.Element {
   const terminalElementRef = useRef<HTMLDivElement>(null);
+  const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [isOpeningProject, setIsOpeningProject] = useState(false);
+  const [openProjectError, setOpenProjectError] = useState<string | null>(null);
   const [isExplorerVisible, setIsExplorerVisible] = useState(true);
 
   useEffect(() => {
     const terminalElement = terminalElementRef.current;
 
-    if (!terminalElement) return;
+    if (!terminalElement || !projectPath) return;
 
     const terminal = new Terminal({
       cursorBlink: true,
@@ -95,7 +142,11 @@ function App(): React.JSX.Element {
 
     resizeObserver.observe(terminalElement);
 
-    window.api.terminal.start({ cols: terminal.cols, rows: terminal.rows });
+    window.api.terminal.start({
+      cols: terminal.cols,
+      rows: terminal.rows,
+      cwd: projectPath,
+    });
 
     return () => {
       resizeObserver.disconnect();
@@ -105,12 +156,43 @@ function App(): React.JSX.Element {
       window.api.terminal.dispose();
       terminal.dispose();
     };
-  }, []);
+  }, [projectPath]);
+
+  const openProject = async (): Promise<void> => {
+    setIsOpeningProject(true);
+    setOpenProjectError(null);
+
+    try {
+      const selectedProjectPath = await window.api.project.open();
+
+      if (selectedProjectPath) {
+        setProjectPath(selectedProjectPath);
+      }
+    } catch (unknownError: unknown) {
+      setOpenProjectError(
+        unknownError instanceof Error
+          ? unknownError.message
+          : "Unable to open project",
+      );
+    } finally {
+      setIsOpeningProject(false);
+    }
+  };
+
+  if (!projectPath) {
+    return (
+      <LandingPage
+        onOpenProject={openProject}
+        isOpening={isOpeningProject}
+        error={openProjectError}
+      />
+    );
+  }
 
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div className="app-title">Canopy</div>
+        <div className="app-title">Canopy · {getProjectName(projectPath)}</div>
         <button
           type="button"
           className="explorer-toggle"
@@ -127,7 +209,9 @@ function App(): React.JSX.Element {
         <section className="terminal-shell" aria-label="Terminal">
           <div ref={terminalElementRef} className="terminal-container" />
         </section>
-        {isExplorerVisible ? <ProjectExplorer /> : null}
+        {isExplorerVisible ? (
+          <ProjectExplorer projectPath={projectPath} />
+        ) : null}
       </div>
     </main>
   );

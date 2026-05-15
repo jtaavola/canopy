@@ -1,11 +1,19 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
 
+export interface ProjectApi {
+  open: () => Promise<string | null>;
+}
+
 export interface FileTreeApi {
-  list: () => Promise<string[]>;
+  list: (rootPath: string) => Promise<string[]>;
 }
 
 export interface TerminalApi {
-  start: (size: { cols: number; rows: number }) => Promise<void>;
+  start: (options: {
+    cols: number;
+    rows: number;
+    cwd: string;
+  }) => Promise<void>;
   write: (data: string) => void;
   resize: (size: { cols: number; rows: number }) => void;
   dispose: () => void;
@@ -19,6 +27,7 @@ declare global {
   interface Window {
     electron: ElectronAPI;
     api: {
+      project: ProjectApi;
       fileTree: FileTreeApi;
       terminal: TerminalApi;
     };

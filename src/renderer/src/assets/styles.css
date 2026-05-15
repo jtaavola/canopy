@@ -214,6 +214,81 @@ body {
   outline-offset: 2px;
 }
 
+.landing-shell {
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.landing-card {
+  width: min(520px, 100%);
+  padding: 40px;
+  border: 1px solid #2a2a2a;
+  border-radius: 18px;
+  background: #181818;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 32%);
+  color: #f2f2f2;
+  text-align: center;
+}
+
+.landing-kicker {
+  margin-bottom: 12px;
+  color: #7ee0a2;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.landing-card h1 {
+  margin-bottom: 12px;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.landing-card p {
+  margin: 0 auto 28px;
+  max-width: 390px;
+  color: rgba(242, 242, 242, 0.68);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.primary-action {
+  min-width: 160px;
+  height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9px;
+  background: #3fcf76;
+  color: #07150c;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.primary-action:hover:not(:disabled) {
+  background: #58dc89;
+}
+
+.primary-action:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.primary-action:focus-visible {
+  outline: 2px solid #9af0bb;
+  outline-offset: 3px;
+}
+
+.landing-error {
+  margin-top: 18px;
+  color: #ff8a8a;
+  font-size: 13px;
+}
+
 .workspace-shell {
   flex: 1;
   min-height: 0;

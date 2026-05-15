@@ -6,6 +6,7 @@ import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   shell,
   type WebFrameMain,
@@ -105,18 +106,38 @@ function validateSender(frame: WebFrameMain | null): boolean {
   }
 }
 
-function registerFileTreeIpc(): void {
-  ipcMain.handle("file-tree:list", async (event) => {
-    if (!validateSender(event.senderFrame)) return [];
+function registerProjectIpc(): void {
+  ipcMain.handle("project:open", async (event) => {
+    if (!validateSender(event.senderFrame)) return null;
 
-    return collectProjectPaths(process.cwd());
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Open project",
+      properties: ["openDirectory" as const],
+    };
+    const result = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+
+    if (result.canceled) return null;
+
+    return result.filePaths[0] ?? null;
+  });
+}
+
+function registerFileTreeIpc(): void {
+  ipcMain.handle("file-tree:list", async (event, rootPath?: unknown) => {
+    if (!validateSender(event.senderFrame)) return [];
+    if (typeof rootPath !== "string" || rootPath.length === 0) return [];
+
+    return collectProjectPaths(rootPath);
   });
 }
 
 function registerTerminalIpc(): void {
   ipcMain.handle(
     "terminal:start",
-    (event, options?: { cols?: unknown; rows?: unknown }) => {
+    (event, options?: { cols?: unknown; rows?: unknown; cwd?: unknown }) => {
       if (!validateSender(event.senderFrame)) return;
 
       const webContentsId = event.sender.id;
@@ -128,7 +149,10 @@ function registerTerminalIpc(): void {
         name: "xterm-256color",
         cols: normalizeTerminalDimension(options?.cols, 80),
         rows: normalizeTerminalDimension(options?.rows, 24),
-        cwd: os.homedir(),
+        cwd:
+          typeof options?.cwd === "string" && options.cwd.length > 0
+            ? options.cwd
+            : os.homedir(),
         env: process.env,
       });
 
@@ -232,6 +256,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window);
   });
 
+  registerProjectIpc();
   registerFileTreeIpc();
   registerTerminalIpc();
 
