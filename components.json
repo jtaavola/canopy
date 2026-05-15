@@ -4,7 +4,7 @@
   "rsc": false,
   "tsx": true,
   "tailwind": {
-    "css": "src/renderer/src/assets/main.css",
+    "css": "src/renderer/src/assets/styles.css",
     "baseColor": "olive",
     "cssVariables": true,
     "prefix": ""
