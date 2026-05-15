@@ -1,4 +1,5 @@
 import { FileTree, useFileTree } from "@pierre/trees/react";
+import { IconLayoutSidebarRight } from "@tabler/icons-react";
 import { FitAddon } from "@xterm/addon-fit";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
@@ -115,9 +116,11 @@ function App(): React.JSX.Element {
           className="explorer-toggle"
           aria-controls="project-explorer"
           aria-expanded={isExplorerVisible}
+          aria-label={isExplorerVisible ? "Hide files" : "Show files"}
+          title={isExplorerVisible ? "Hide files" : "Show files"}
           onClick={() => setIsExplorerVisible((isVisible) => !isVisible)}
         >
-          {isExplorerVisible ? "Hide files" : "Show files"}
+          <IconLayoutSidebarRight aria-hidden="true" size={18} stroke={1.8} />
         </button>
       </header>
       <div className="workspace-shell">
