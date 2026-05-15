@@ -220,8 +220,10 @@ function createWindow(): void {
     },
   });
 
+  const mainWindowWebContentsId = mainWindow.webContents.id;
+
   mainWindow.on("closed", () => {
-    cleanupTerminal(mainWindow.webContents.id);
+    cleanupTerminal(mainWindowWebContentsId);
   });
 
   mainWindow.on("ready-to-show", () => {
