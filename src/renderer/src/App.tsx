@@ -3,48 +3,11 @@ import { IconLayoutSidebarRight } from "@tabler/icons-react";
 import { FitAddon } from "@xterm/addon-fit";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
-import canopyLogo from "../../../resources/icon.png";
+import ProjectsLanding from "./ProjectsLanding";
 import "xterm/css/xterm.css";
 
 function getProjectName(projectPath: string): string {
   return projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? projectPath;
-}
-
-function ProjectsLanding({
-  onOpenProject,
-  isOpening,
-  error,
-}: {
-  onOpenProject: () => void;
-  isOpening: boolean;
-  error: string | null;
-}): React.JSX.Element {
-  return (
-    <section className="projects-landing" aria-labelledby="projects-title">
-      <div className="projects-panel">
-        <div className="projects-heading">
-          <img src={canopyLogo} alt="" className="projects-logo" />
-          <div className="projects-brand-name">Canopy</div>
-          <h1 id="projects-title">Projects</h1>
-          <p>Open a folder to start working in Canopy.</p>
-        </div>
-        <button
-          type="button"
-          className="project-row"
-          onClick={onOpenProject}
-          disabled={isOpening}
-        >
-          <span className="project-row-title">
-            {isOpening ? "Opening…" : "Open project…"}
-          </span>
-          <span className="project-row-description">
-            Select a local folder as your workspace
-          </span>
-        </button>
-        {error ? <div className="landing-error">{error}</div> : null}
-      </div>
-    </section>
-  );
 }
 
 function ProjectExplorer({
