@@ -42,10 +42,20 @@ export function ChangedDiff({
   }, [filePath, projectPath]);
 
   return (
-    <section className="file-preview" aria-label="Changed file diff">
-      <header className="file-preview-header">
+    <section
+      className="flex size-full min-h-0 flex-col bg-background"
+      aria-label="Changed file diff"
+    >
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
         <span className="min-w-0 flex-1 truncate">{filePath}</span>
-        <Button type="button" variant="ghost" size="icon-sm" onClick={onClose}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Close changed file diff and return to terminal"
+          title="Close changed file diff"
+          onClick={onClose}
+        >
           <IconX aria-hidden="true" data-icon="inline-start" />
         </Button>
       </header>

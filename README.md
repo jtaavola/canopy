@@ -1,5 +1,7 @@
 # canopy
 
+TMP EDIT: temporary README update.
+
 An Electron application with React and TypeScript
 
 ## Recommended IDE Setup
