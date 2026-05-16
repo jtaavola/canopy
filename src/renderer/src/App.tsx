@@ -17,7 +17,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { FitAddon } from "@xterm/addon-fit";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { ChangedDiff, ChangedFilesList } from "./ChangedFiles";
 import { FilePreview } from "./FilePreview";
@@ -350,6 +350,16 @@ function App(): React.JSX.Element {
     WebkitAppRegion: "no-drag",
   } as React.CSSProperties & { WebkitAppRegion: string };
 
+  const openFilePreview = useCallback((filePath: string): void => {
+    setSelectedChangedFilePath(null);
+    setSelectedFilePath(filePath);
+  }, []);
+
+  const openChangedFilePreview = useCallback((filePath: string): void => {
+    setSelectedFilePath(null);
+    setSelectedChangedFilePath(filePath);
+  }, []);
+
   return (
     <main className="app-shell">
       <header className="app-header relative">
@@ -466,14 +476,8 @@ function App(): React.JSX.Element {
                 >
                   <ProjectExplorer
                     projectPath={activeProjectPath}
-                    onOpenFile={(filePath) => {
-                      setSelectedChangedFilePath(null);
-                      setSelectedFilePath(filePath);
-                    }}
-                    onOpenChangedFile={(filePath) => {
-                      setSelectedFilePath(null);
-                      setSelectedChangedFilePath(filePath);
-                    }}
+                    onOpenFile={openFilePreview}
+                    onOpenChangedFile={openChangedFilePreview}
                   />
                 </ResizablePanel>
               </>
