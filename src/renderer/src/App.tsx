@@ -1,4 +1,6 @@
 import { FileTree, useFileTree } from "@pierre/trees/react";
+import { Button } from "@renderer/components/ui/button";
+import { cn } from "@renderer/lib/utils";
 import {
   IconLayoutSidebar,
   IconLayoutSidebarRight,
@@ -38,16 +40,18 @@ function ProjectManager({
     >
       <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-neutral-800 border-b py-0 pr-2 pl-3 font-bold text-neutral-400 text-xs uppercase tracking-widest">
         <span>Projects</span>
-        <button
+        <Button
           type="button"
-          className="inline-flex size-8 items-center justify-center rounded-md border-0 bg-transparent p-0 text-neutral-200 hover:bg-neutral-800 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2 disabled:cursor-default disabled:opacity-50"
+          variant="ghost"
+          size="icon-sm"
+          className="text-neutral-200"
           aria-label="Open another project"
           title="Open another project"
           onClick={onOpenProject}
           disabled={isOpeningProject}
         >
-          <IconPlus aria-hidden="true" size={16} stroke={1.9} />
-        </button>
+          <IconPlus aria-hidden="true" data-icon="inline-start" />
+        </Button>
       </div>
       <ul className="m-0 min-h-0 flex-1 overflow-auto p-2">
         {projectPaths.map((projectPath) => {
@@ -55,9 +59,15 @@ function ProjectManager({
 
           return (
             <li key={projectPath} className="relative mb-1 flex items-stretch">
-              <button
+              <Button
                 type="button"
-                className={`flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-0.5 rounded-lg border py-2 pr-9 pl-2.5 text-left hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2 ${isActive ? "border-neutral-500 bg-neutral-700 text-white shadow-sm" : "border-transparent bg-transparent text-neutral-200 hover:bg-neutral-800"}`}
+                variant="ghost"
+                className={cn(
+                  "h-auto min-w-0 flex-1 flex-col items-start gap-0.5 rounded-lg border py-2 pr-9 pl-2.5 text-left hover:text-white",
+                  isActive
+                    ? "border-neutral-500 bg-neutral-700 text-white shadow-sm"
+                    : "border-transparent bg-transparent text-neutral-200 hover:bg-neutral-800",
+                )}
                 aria-current={isActive ? "page" : undefined}
                 title={projectPath}
                 onClick={() => onSelectProject(projectPath)}
@@ -68,16 +78,18 @@ function ProjectManager({
                 <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-neutral-500 text-xs">
                   {projectPath}
                 </span>
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="absolute top-2 right-1.5 inline-flex size-6 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-neutral-400 hover:bg-neutral-700 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
+                variant="ghost"
+                size="icon-xs"
+                className="absolute top-2 right-1.5 text-neutral-400 hover:bg-neutral-700 hover:text-white"
                 aria-label={`Remove ${getProjectName(projectPath)} from open projects`}
                 title="Remove from open projects"
                 onClick={() => onRemoveProject(projectPath)}
               >
-                <IconX aria-hidden="true" size={14} stroke={2} />
-              </button>
+                <IconX aria-hidden="true" data-icon="inline-start" />
+              </Button>
             </li>
           );
         })}
@@ -262,9 +274,11 @@ function App(): React.JSX.Element {
     <main className="app-shell">
       <header className="app-header relative">
         {activeProjectPath ? (
-          <button
+          <Button
             type="button"
-            className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-neutral-200 hover:bg-neutral-800 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
+            variant="ghost"
+            size="icon-sm"
+            className="text-neutral-200"
             style={noDragStyle}
             aria-controls="project-manager"
             aria-expanded={isProjectManagerVisible}
@@ -276,17 +290,19 @@ function App(): React.JSX.Element {
               setIsProjectManagerVisible((isVisible) => !isVisible)
             }
           >
-            <IconLayoutSidebar aria-hidden="true" size={18} stroke={1.8} />
-          </button>
+            <IconLayoutSidebar aria-hidden="true" data-icon="inline-start" />
+          </Button>
         ) : null}
         <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center font-semibold text-neutral-100 text-sm tracking-tight">
           Canopy
           {activeProjectPath ? ` · ${getProjectName(activeProjectPath)}` : ""}
         </div>
         {activeProjectPath ? (
-          <button
+          <Button
             type="button"
-            className="ml-auto inline-flex size-8 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-neutral-200 hover:bg-neutral-800 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
+            variant="ghost"
+            size="icon-sm"
+            className="ml-auto text-neutral-200"
             style={noDragStyle}
             aria-controls="project-explorer"
             aria-expanded={isExplorerVisible}
@@ -294,8 +310,11 @@ function App(): React.JSX.Element {
             title={isExplorerVisible ? "Hide files" : "Show files"}
             onClick={() => setIsExplorerVisible((isVisible) => !isVisible)}
           >
-            <IconLayoutSidebarRight aria-hidden="true" size={18} stroke={1.8} />
-          </button>
+            <IconLayoutSidebarRight
+              aria-hidden="true"
+              data-icon="inline-start"
+            />
+          </Button>
         ) : null}
       </header>
       <div className="workspace-shell">
