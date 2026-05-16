@@ -1,4 +1,8 @@
-import { FileTree, useFileTree } from "@pierre/trees/react";
+import {
+  FileTree,
+  useFileTree,
+  useFileTreeSelection,
+} from "@pierre/trees/react";
 import { Button } from "@renderer/components/ui/button";
 import {
   ResizableHandle,
@@ -15,6 +19,7 @@ import {
 import { FitAddon } from "@xterm/addon-fit";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
+import { FilePreview } from "./FilePreview";
 import ProjectsLanding from "./ProjectsLanding";
 import "xterm/css/xterm.css";
 
@@ -103,10 +108,32 @@ function ProjectManager({
   );
 }
 
+function FileSelectionObserver({
+  model,
+  filePaths,
+  onOpenFile,
+}: {
+  model: ReturnType<typeof useFileTree>["model"];
+  filePaths: readonly string[];
+  onOpenFile: (filePath: string) => void;
+}): null {
+  const selectedPaths = useFileTreeSelection(model);
+  const filePathSet = new Set(filePaths);
+  const selectedFilePath = selectedPaths.find((path) => filePathSet.has(path));
+
+  useEffect(() => {
+    if (selectedFilePath) onOpenFile(selectedFilePath);
+  }, [onOpenFile, selectedFilePath]);
+
+  return null;
+}
+
 function ProjectExplorer({
   projectPath,
+  onOpenFile,
 }: {
   projectPath: string;
+  onOpenFile: (filePath: string) => void;
 }): React.JSX.Element {
   const [paths, setPaths] = useState<readonly string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +183,11 @@ function ProjectExplorer({
         Files · {getProjectName(projectPath)}
       </div>
       {error ? <div className="explorer-error">{error}</div> : null}
+      <FileSelectionObserver
+        model={model}
+        filePaths={paths}
+        onOpenFile={onOpenFile}
+      />
       <FileTree model={model} className="explorer-tree" />
     </aside>
   );
@@ -167,6 +199,7 @@ function App(): React.JSX.Element {
   const [activeProjectPath, setActiveProjectPath] = useState<string | null>(
     null,
   );
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [isOpeningProject, setIsOpeningProject] = useState(false);
   const [openProjectError, setOpenProjectError] = useState<string | null>(null);
   const [isProjectManagerVisible, setIsProjectManagerVisible] = useState(true);
@@ -242,6 +275,7 @@ function App(): React.JSX.Element {
             : [...currentProjectPaths, selectedProjectPath],
         );
         setActiveProjectPath(selectedProjectPath);
+        setSelectedFilePath(null);
         setIsProjectManagerVisible(true);
       }
     } catch (unknownError: unknown) {
@@ -255,6 +289,11 @@ function App(): React.JSX.Element {
     }
   };
 
+  const selectProject = (projectPath: string): void => {
+    setActiveProjectPath(projectPath);
+    setSelectedFilePath(null);
+  };
+
   const removeProject = (projectPathToRemove: string): void => {
     setProjectPaths((currentProjectPaths) => {
       const nextProjectPaths = currentProjectPaths.filter(
@@ -266,6 +305,7 @@ function App(): React.JSX.Element {
           return currentActiveProjectPath;
         }
 
+        setSelectedFilePath(null);
         return nextProjectPaths[0] ?? null;
       });
 
@@ -344,7 +384,7 @@ function App(): React.JSX.Element {
                     activeProjectPath={activeProjectPath}
                     isOpeningProject={isOpeningProject}
                     onOpenProject={openProject}
-                    onSelectProject={setActiveProjectPath}
+                    onSelectProject={selectProject}
                     onRemoveProject={removeProject}
                   />
                 </ResizablePanel>
@@ -356,9 +396,19 @@ function App(): React.JSX.Element {
               minSize="30%"
               className="min-w-0"
             >
-              <section className="terminal-shell" aria-label="Terminal">
+              <section
+                className={cn("terminal-shell", selectedFilePath && "hidden")}
+                aria-label="Terminal"
+              >
                 <div ref={terminalElementRef} className="terminal-container" />
               </section>
+              {selectedFilePath ? (
+                <FilePreview
+                  projectPath={activeProjectPath}
+                  filePath={selectedFilePath}
+                  onClose={() => setSelectedFilePath(null)}
+                />
+              ) : null}
             </ResizablePanel>
             {isExplorerVisible ? (
               <>
@@ -371,7 +421,10 @@ function App(): React.JSX.Element {
                   onResize={(size) => setExplorerSize(`${size.asPercentage}%`)}
                   className="min-w-0"
                 >
-                  <ProjectExplorer projectPath={activeProjectPath} />
+                  <ProjectExplorer
+                    projectPath={activeProjectPath}
+                    onOpenFile={setSelectedFilePath}
+                  />
                 </ResizablePanel>
               </>
             ) : null}
