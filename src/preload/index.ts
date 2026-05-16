@@ -15,6 +15,17 @@ const api = {
         filePath,
       }) as Promise<import("./index.d").FilePreviewResult>,
   },
+  gitChanges: {
+    list: (rootPath: string) =>
+      ipcRenderer.invoke("git-changes:list", rootPath) as Promise<
+        import("./index.d").ChangedFilesResult
+      >,
+    diff: (rootPath: string, filePath: string) =>
+      ipcRenderer.invoke("git-changes:diff", {
+        rootPath,
+        filePath,
+      }) as Promise<import("./index.d").ChangedFileDiffResult>,
+  },
   terminal: {
     start: (options: { cols: number; rows: number; cwd: string }) =>
       ipcRenderer.invoke("terminal:start", options),

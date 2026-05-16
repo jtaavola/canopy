@@ -19,6 +19,7 @@ import {
 import { FitAddon } from "@xterm/addon-fit";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
+import { ChangedDiff, ChangedFilesList } from "./ChangedFiles";
 import { FilePreview } from "./FilePreview";
 import ProjectsLanding from "./ProjectsLanding";
 import "xterm/css/xterm.css";
@@ -131,12 +132,15 @@ function FileSelectionObserver({
 function ProjectExplorer({
   projectPath,
   onOpenFile,
+  onOpenChangedFile,
 }: {
   projectPath: string;
   onOpenFile: (filePath: string) => void;
+  onOpenChangedFile: (filePath: string) => void;
 }): React.JSX.Element {
   const [paths, setPaths] = useState<readonly string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"files" | "changed">("files");
   const { model } = useFileTree({
     paths,
     search: true,
@@ -179,16 +183,42 @@ function ProjectExplorer({
       className="flex size-full min-h-0 flex-col bg-neutral-950"
       aria-label="Project file explorer"
     >
-      <div className="explorer-header">
-        Files · {getProjectName(projectPath)}
+      <div className="explorer-header gap-2">
+        <button
+          type="button"
+          className={cn(activeTab === "files" && "text-white")}
+          onClick={() => setActiveTab("files")}
+        >
+          Files
+        </button>
+        <span>·</span>
+        <button
+          type="button"
+          className={cn(activeTab === "changed" && "text-white")}
+          onClick={() => setActiveTab("changed")}
+        >
+          Changed
+        </button>
+        <span className="min-w-0 truncate normal-case tracking-normal">
+          {getProjectName(projectPath)}
+        </span>
       </div>
-      {error ? <div className="explorer-error">{error}</div> : null}
-      <FileSelectionObserver
-        model={model}
-        filePaths={paths}
-        onOpenFile={onOpenFile}
-      />
-      <FileTree model={model} className="explorer-tree" />
+      {activeTab === "files" ? (
+        <>
+          {error ? <div className="explorer-error">{error}</div> : null}
+          <FileSelectionObserver
+            model={model}
+            filePaths={paths}
+            onOpenFile={onOpenFile}
+          />
+          <FileTree model={model} className="explorer-tree" />
+        </>
+      ) : (
+        <ChangedFilesList
+          projectPath={projectPath}
+          onOpenChangedFile={onOpenChangedFile}
+        />
+      )}
     </aside>
   );
 }
@@ -200,6 +230,9 @@ function App(): React.JSX.Element {
     null,
   );
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<
+    string | null
+  >(null);
   const [isOpeningProject, setIsOpeningProject] = useState(false);
   const [openProjectError, setOpenProjectError] = useState<string | null>(null);
   const [isProjectManagerVisible, setIsProjectManagerVisible] = useState(true);
@@ -276,6 +309,7 @@ function App(): React.JSX.Element {
         );
         setActiveProjectPath(selectedProjectPath);
         setSelectedFilePath(null);
+        setSelectedChangedFilePath(null);
         setIsProjectManagerVisible(true);
       }
     } catch (unknownError: unknown) {
@@ -292,6 +326,7 @@ function App(): React.JSX.Element {
   const selectProject = (projectPath: string): void => {
     setActiveProjectPath(projectPath);
     setSelectedFilePath(null);
+    setSelectedChangedFilePath(null);
   };
 
   const removeProject = (projectPathToRemove: string): void => {
@@ -306,6 +341,7 @@ function App(): React.JSX.Element {
         }
 
         setSelectedFilePath(null);
+        setSelectedChangedFilePath(null);
         return nextProjectPaths[0] ?? null;
       });
 
@@ -397,7 +433,10 @@ function App(): React.JSX.Element {
               className="h-full min-w-0"
             >
               <section
-                className={cn("terminal-shell", selectedFilePath && "hidden")}
+                className={cn(
+                  "terminal-shell",
+                  (selectedFilePath || selectedChangedFilePath) && "hidden",
+                )}
                 aria-label="Terminal"
               >
                 <div ref={terminalElementRef} className="terminal-container" />
@@ -407,6 +446,13 @@ function App(): React.JSX.Element {
                   projectPath={activeProjectPath}
                   filePath={selectedFilePath}
                   onClose={() => setSelectedFilePath(null)}
+                />
+              ) : null}
+              {selectedChangedFilePath ? (
+                <ChangedDiff
+                  projectPath={activeProjectPath}
+                  filePath={selectedChangedFilePath}
+                  onClose={() => setSelectedChangedFilePath(null)}
                 />
               ) : null}
             </ResizablePanel>
@@ -423,7 +469,14 @@ function App(): React.JSX.Element {
                 >
                   <ProjectExplorer
                     projectPath={activeProjectPath}
-                    onOpenFile={setSelectedFilePath}
+                    onOpenFile={(filePath) => {
+                      setSelectedChangedFilePath(null);
+                      setSelectedFilePath(filePath);
+                    }}
+                    onOpenChangedFile={(filePath) => {
+                      setSelectedFilePath(null);
+                      setSelectedChangedFilePath(filePath);
+                    }}
                   />
                 </ResizablePanel>
               </>

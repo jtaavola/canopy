@@ -17,6 +17,30 @@ export interface FileTreeApi {
   preview: (rootPath: string, filePath: string) => Promise<FilePreviewResult>;
 }
 
+export type ChangedFile = {
+  path: string;
+  oldPath?: string;
+  status: "added" | "modified" | "deleted" | "renamed" | "untracked";
+  staged: boolean;
+  unstaged: boolean;
+};
+
+export type ChangedFilesResult =
+  | { status: "ok"; files: ChangedFile[] }
+  | { status: "not-git" }
+  | { status: "error"; message: string };
+
+export type ChangedFileDiffResult =
+  | { status: "ok"; patch: string }
+  | { status: "not-git" }
+  | { status: "not-found" }
+  | { status: "error"; message: string };
+
+export interface GitChangesApi {
+  list: (rootPath: string) => Promise<ChangedFilesResult>;
+  diff: (rootPath: string, filePath: string) => Promise<ChangedFileDiffResult>;
+}
+
 export interface TerminalApi {
   start: (options: {
     cols: number;
@@ -38,6 +62,7 @@ declare global {
     api: {
       project: ProjectApi;
       fileTree: FileTreeApi;
+      gitChanges: GitChangesApi;
       terminal: TerminalApi;
     };
   }
