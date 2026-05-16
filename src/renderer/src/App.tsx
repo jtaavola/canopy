@@ -348,10 +348,7 @@ function App(): React.JSX.Element {
                     onRemoveProject={removeProject}
                   />
                 </ResizablePanel>
-                <ResizableHandle
-                  withHandle
-                  className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700"
-                />
+                <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
               </>
             ) : null}
             <ResizablePanel
@@ -365,10 +362,7 @@ function App(): React.JSX.Element {
             </ResizablePanel>
             {isExplorerVisible ? (
               <>
-                <ResizableHandle
-                  withHandle
-                  className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700"
-                />
+                <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
                 <ResizablePanel
                   id="project-explorer-panel"
                   defaultSize={explorerSize}
