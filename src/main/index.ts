@@ -1,7 +1,9 @@
+import { execFile } from "node:child_process";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import os from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import {
   app,
@@ -13,6 +15,8 @@ import {
 } from "electron";
 import * as pty from "node-pty";
 import icon from "../../resources/icon.png?asset";
+
+const execFileAsync = promisify(execFile);
 
 const terminals = new Map<number, pty.IPty>();
 
@@ -45,6 +49,25 @@ type FilePreviewResult =
   | { status: "directory" }
   | { status: "unavailable"; message: string };
 
+type ChangedFile = {
+  path: string;
+  oldPath?: string;
+  status: "added" | "modified" | "deleted" | "renamed" | "untracked";
+  staged: boolean;
+  unstaged: boolean;
+};
+
+type ChangedFilesResult =
+  | { status: "ok"; files: ChangedFile[] }
+  | { status: "not-git" }
+  | { status: "error"; message: string };
+
+type ChangedFileDiffResult =
+  | { status: "ok"; patch: string }
+  | { status: "not-git" }
+  | { status: "not-found" }
+  | { status: "error"; message: string };
+
 function isPathInsideRoot(rootPath: string, candidatePath: string): boolean {
   const relativePath = relative(rootPath, candidatePath);
 
@@ -62,6 +85,99 @@ function hasBinaryBytes(buffer: Buffer): boolean {
   }
 
   return false;
+}
+
+function mapGitStatus(code: string): ChangedFile["status"] {
+  if (code === "R" || code === "C") return "renamed";
+  if (code === "D") return "deleted";
+  if (code === "A") return "added";
+  if (code === "?") return "untracked";
+  return "modified";
+}
+
+function parseGitStatus(output: string): ChangedFile[] {
+  const records = output.split("\0").filter(Boolean);
+  const files: ChangedFile[] = [];
+
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    const xy = record.slice(0, 2);
+    const path = record.slice(3);
+    const statusCode = xy.includes("?") ? "?" : xy.replaceAll(" ", "")[0];
+    const file: ChangedFile = {
+      path,
+      status: mapGitStatus(statusCode ?? "M"),
+      staged: xy[0] !== " " && xy[0] !== "?",
+      unstaged: xy[1] !== " ",
+    };
+
+    if (file.status === "renamed") {
+      file.oldPath = records[index + 1];
+      index += 1;
+    }
+
+    files.push(file);
+  }
+
+  return files;
+}
+
+async function collectGitChanges(
+  rootPath: string,
+): Promise<ChangedFilesResult> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+      { cwd: rootPath, maxBuffer: 10 * 1024 * 1024 },
+    );
+
+    return { status: "ok", files: parseGitStatus(stdout) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Git failed.";
+    if (message.includes("not a git repository")) return { status: "not-git" };
+    return { status: "error", message };
+  }
+}
+
+async function getGitDiff(
+  rootPath: string,
+  filePath: string,
+): Promise<ChangedFileDiffResult> {
+  const changes = await collectGitChanges(rootPath);
+  if (changes.status !== "ok") return changes;
+
+  const change = changes.files.find(
+    (file) => file.path === filePath || file.oldPath === filePath,
+  );
+  if (!change) return { status: "not-found" };
+
+  const args =
+    change.status === "untracked"
+      ? [
+          "diff",
+          "--no-index",
+          "--",
+          os.platform() === "win32" ? "NUL" : "/dev/null",
+          change.path,
+        ]
+      : ["diff", "HEAD", "--", change.oldPath ?? change.path, change.path];
+
+  try {
+    const { stdout } = await execFileAsync("git", args, {
+      cwd: rootPath,
+      maxBuffer: 20 * 1024 * 1024,
+    });
+    return { status: "ok", patch: stdout };
+  } catch (error) {
+    const maybeExecError = error as { stdout?: string; message?: string };
+    if (maybeExecError.stdout) {
+      return { status: "ok", patch: maybeExecError.stdout };
+    }
+    const message = maybeExecError.message ?? "Unable to load diff.";
+    if (message.includes("not a git repository")) return { status: "not-git" };
+    return { status: "error", message };
+  }
 }
 
 async function collectProjectPaths(rootPath: string): Promise<string[]> {
@@ -243,6 +359,41 @@ function registerFileTreeIpc(): void {
   );
 }
 
+function registerGitChangesIpc(): void {
+  ipcMain.handle("git-changes:list", async (event, rootPath?: unknown) => {
+    if (!validateSender(event.senderFrame))
+      return {
+        status: "error",
+        message: "Unauthorized",
+      } satisfies ChangedFilesResult;
+    if (typeof rootPath !== "string" || rootPath.length === 0)
+      return { status: "not-git" } satisfies ChangedFilesResult;
+
+    return collectGitChanges(rootPath);
+  });
+
+  ipcMain.handle(
+    "git-changes:diff",
+    async (event, options?: { rootPath?: unknown; filePath?: unknown }) => {
+      if (!validateSender(event.senderFrame))
+        return {
+          status: "error",
+          message: "Unauthorized",
+        } satisfies ChangedFileDiffResult;
+      if (
+        typeof options?.rootPath !== "string" ||
+        options.rootPath.length === 0 ||
+        typeof options.filePath !== "string" ||
+        options.filePath.length === 0
+      ) {
+        return { status: "not-found" } satisfies ChangedFileDiffResult;
+      }
+
+      return getGitDiff(options.rootPath, options.filePath);
+    },
+  );
+}
+
 function registerTerminalIpc(): void {
   ipcMain.handle(
     "terminal:start",
@@ -369,6 +520,7 @@ app.whenReady().then(() => {
 
   registerProjectIpc();
   registerFileTreeIpc();
+  registerGitChangesIpc();
   registerTerminalIpc();
 
   createWindow();

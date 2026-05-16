@@ -1,3 +1,4 @@
+import { PatchDiff } from "@pierre/diffs/react";
 import {
   FileTree,
   useFileTree,
@@ -19,6 +20,7 @@ import {
 import { FitAddon } from "@xterm/addon-fit";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
+import type { ChangedFile } from "../../preload/index.d";
 import { FilePreview } from "./FilePreview";
 import ProjectsLanding from "./ProjectsLanding";
 import "xterm/css/xterm.css";
@@ -128,15 +130,144 @@ function FileSelectionObserver({
   return null;
 }
 
+function ChangedDiff({
+  projectPath,
+  filePath,
+  onClose,
+}: {
+  projectPath: string;
+  filePath: string;
+  onClose: () => void;
+}): React.JSX.Element {
+  const [patch, setPatch] = useState<string | null>(null);
+  const [message, setMessage] = useState("Loading diff…");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    setPatch(null);
+    setMessage("Loading diff…");
+
+    window.api.gitChanges.diff(projectPath, filePath).then((result) => {
+      if (!isMounted) return;
+      if (result.status === "ok") {
+        setPatch(result.patch);
+        setMessage(result.patch ? "" : "No diff available.");
+      } else if (result.status === "not-git") {
+        setMessage("This project is not a git repository.");
+      } else if (result.status === "not-found") {
+        setMessage("This file is no longer changed.");
+      } else {
+        setMessage(result.message);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [filePath, projectPath]);
+
+  return (
+    <section className="file-preview" aria-label="Changed file diff">
+      <header className="file-preview-header">
+        <span className="min-w-0 flex-1 truncate">{filePath}</span>
+        <Button type="button" variant="ghost" size="icon-sm" onClick={onClose}>
+          <IconX aria-hidden="true" data-icon="inline-start" />
+        </Button>
+      </header>
+      <div className="min-h-0 flex-1 overflow-auto bg-neutral-950">
+        {patch ? (
+          <PatchDiff
+            patch={patch}
+            disableWorkerPool
+            options={{ diffStyle: "split", theme: "github-dark" }}
+          />
+        ) : (
+          <div className="p-6 text-neutral-400 text-sm">{message}</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ChangedFilesList({
+  projectPath,
+  onOpenChangedFile,
+}: {
+  projectPath: string;
+  onOpenChangedFile: (filePath: string) => void;
+}): React.JSX.Element {
+  const [files, setFiles] = useState<readonly ChangedFile[]>([]);
+  const [message, setMessage] = useState("Loading changes…");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const load = (): void => {
+      window.api.gitChanges
+        .list(projectPath)
+        .then((result) => {
+          if (!isMounted) return;
+          if (result.status === "ok") {
+            setFiles(result.files);
+            setMessage(result.files.length ? "" : "No changed files.");
+          } else if (result.status === "not-git") {
+            setFiles([]);
+            setMessage("This project is not a git repository.");
+          } else {
+            setFiles([]);
+            setMessage(result.message);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setMessage("Unable to load changed files.");
+        });
+    };
+
+    load();
+    const interval = window.setInterval(load, 2000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(interval);
+    };
+  }, [projectPath]);
+
+  if (!files.length) return <div className="explorer-error">{message}</div>;
+
+  return (
+    <ul className="m-0 min-h-0 flex-1 overflow-auto p-2">
+      {files.map((file) => (
+        <li key={`${file.oldPath ?? ""}:${file.path}`}>
+          <button
+            type="button"
+            className="w-full rounded px-2 py-1.5 text-left text-neutral-200 text-sm hover:bg-neutral-800"
+            onClick={() => onOpenChangedFile(file.path)}
+          >
+            <span className="mr-2 inline-block w-5 text-center text-neutral-500 text-xs uppercase">
+              {file.status[0]}
+            </span>
+            {file.oldPath ? `${file.oldPath} → ` : ""}
+            {file.path}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ProjectExplorer({
   projectPath,
   onOpenFile,
+  onOpenChangedFile,
 }: {
   projectPath: string;
   onOpenFile: (filePath: string) => void;
+  onOpenChangedFile: (filePath: string) => void;
 }): React.JSX.Element {
   const [paths, setPaths] = useState<readonly string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"files" | "changed">("files");
   const { model } = useFileTree({
     paths,
     search: true,
@@ -179,16 +310,42 @@ function ProjectExplorer({
       className="flex size-full min-h-0 flex-col bg-neutral-950"
       aria-label="Project file explorer"
     >
-      <div className="explorer-header">
-        Files · {getProjectName(projectPath)}
+      <div className="explorer-header gap-2">
+        <button
+          type="button"
+          className={cn(activeTab === "files" && "text-white")}
+          onClick={() => setActiveTab("files")}
+        >
+          Files
+        </button>
+        <span>·</span>
+        <button
+          type="button"
+          className={cn(activeTab === "changed" && "text-white")}
+          onClick={() => setActiveTab("changed")}
+        >
+          Changed
+        </button>
+        <span className="min-w-0 truncate normal-case tracking-normal">
+          {getProjectName(projectPath)}
+        </span>
       </div>
-      {error ? <div className="explorer-error">{error}</div> : null}
-      <FileSelectionObserver
-        model={model}
-        filePaths={paths}
-        onOpenFile={onOpenFile}
-      />
-      <FileTree model={model} className="explorer-tree" />
+      {activeTab === "files" ? (
+        <>
+          {error ? <div className="explorer-error">{error}</div> : null}
+          <FileSelectionObserver
+            model={model}
+            filePaths={paths}
+            onOpenFile={onOpenFile}
+          />
+          <FileTree model={model} className="explorer-tree" />
+        </>
+      ) : (
+        <ChangedFilesList
+          projectPath={projectPath}
+          onOpenChangedFile={onOpenChangedFile}
+        />
+      )}
     </aside>
   );
 }
@@ -200,6 +357,9 @@ function App(): React.JSX.Element {
     null,
   );
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<
+    string | null
+  >(null);
   const [isOpeningProject, setIsOpeningProject] = useState(false);
   const [openProjectError, setOpenProjectError] = useState<string | null>(null);
   const [isProjectManagerVisible, setIsProjectManagerVisible] = useState(true);
@@ -276,6 +436,7 @@ function App(): React.JSX.Element {
         );
         setActiveProjectPath(selectedProjectPath);
         setSelectedFilePath(null);
+        setSelectedChangedFilePath(null);
         setIsProjectManagerVisible(true);
       }
     } catch (unknownError: unknown) {
@@ -292,6 +453,7 @@ function App(): React.JSX.Element {
   const selectProject = (projectPath: string): void => {
     setActiveProjectPath(projectPath);
     setSelectedFilePath(null);
+    setSelectedChangedFilePath(null);
   };
 
   const removeProject = (projectPathToRemove: string): void => {
@@ -306,6 +468,7 @@ function App(): React.JSX.Element {
         }
 
         setSelectedFilePath(null);
+        setSelectedChangedFilePath(null);
         return nextProjectPaths[0] ?? null;
       });
 
@@ -397,7 +560,10 @@ function App(): React.JSX.Element {
               className="h-full min-w-0"
             >
               <section
-                className={cn("terminal-shell", selectedFilePath && "hidden")}
+                className={cn(
+                  "terminal-shell",
+                  (selectedFilePath || selectedChangedFilePath) && "hidden",
+                )}
                 aria-label="Terminal"
               >
                 <div ref={terminalElementRef} className="terminal-container" />
@@ -407,6 +573,13 @@ function App(): React.JSX.Element {
                   projectPath={activeProjectPath}
                   filePath={selectedFilePath}
                   onClose={() => setSelectedFilePath(null)}
+                />
+              ) : null}
+              {selectedChangedFilePath ? (
+                <ChangedDiff
+                  projectPath={activeProjectPath}
+                  filePath={selectedChangedFilePath}
+                  onClose={() => setSelectedChangedFilePath(null)}
                 />
               ) : null}
             </ResizablePanel>
@@ -423,7 +596,14 @@ function App(): React.JSX.Element {
                 >
                   <ProjectExplorer
                     projectPath={activeProjectPath}
-                    onOpenFile={setSelectedFilePath}
+                    onOpenFile={(filePath) => {
+                      setSelectedChangedFilePath(null);
+                      setSelectedFilePath(filePath);
+                    }}
+                    onOpenChangedFile={(filePath) => {
+                      setSelectedFilePath(null);
+                      setSelectedChangedFilePath(filePath);
+                    }}
                   />
                 </ResizablePanel>
               </>
