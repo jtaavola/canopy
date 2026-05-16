@@ -199,9 +199,6 @@ function ProjectExplorer({
         >
           Changed
         </button>
-        <span className="min-w-0 truncate normal-case tracking-normal">
-          {getProjectName(projectPath)}
-        </span>
       </div>
       {activeTab === "files" ? (
         <>
