@@ -4,8 +4,17 @@ export interface ProjectApi {
   open: () => Promise<string | null>;
 }
 
+export type FilePreviewResult =
+  | { status: "ok"; content: string }
+  | { status: "binary" }
+  | { status: "too-large"; maxBytes: number }
+  | { status: "not-found" }
+  | { status: "directory" }
+  | { status: "unavailable"; message: string };
+
 export interface FileTreeApi {
   list: (rootPath: string) => Promise<string[]>;
+  preview: (rootPath: string, filePath: string) => Promise<FilePreviewResult>;
 }
 
 export interface TerminalApi {

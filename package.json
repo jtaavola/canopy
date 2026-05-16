@@ -29,6 +29,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "monaco-editor": "^0.55.1",
     "node-pty": "1.2.0-beta.13",
     "radix-ui": "^1.4.3",
     "react-resizable-panels": "^4.11.1",

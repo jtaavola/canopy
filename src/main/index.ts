@@ -1,6 +1,6 @@
-import { readdir } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
-import { join, relative, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import {
@@ -23,6 +23,46 @@ const EXCLUDED_TREE_ENTRIES = new Set([
   "node_modules",
   "out",
 ]);
+
+const FILE_PREVIEW_MAX_BYTES = 1024 * 1024;
+
+const IMAGE_EXTENSIONS = new Set([
+  ".avif",
+  ".gif",
+  ".ico",
+  ".jpeg",
+  ".jpg",
+  ".png",
+  ".svg",
+  ".webp",
+]);
+
+type FilePreviewResult =
+  | { status: "ok"; content: string }
+  | { status: "binary" }
+  | { status: "too-large"; maxBytes: number }
+  | { status: "not-found" }
+  | { status: "directory" }
+  | { status: "unavailable"; message: string };
+
+function isPathInsideRoot(rootPath: string, candidatePath: string): boolean {
+  const relativePath = relative(rootPath, candidatePath);
+
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !isAbsolute(relativePath))
+  );
+}
+
+function hasBinaryBytes(buffer: Buffer): boolean {
+  const bytesToCheck = Math.min(buffer.length, 8000);
+
+  for (let index = 0; index < bytesToCheck; index += 1) {
+    if (buffer[index] === 0) return true;
+  }
+
+  return false;
+}
 
 async function collectProjectPaths(rootPath: string): Promise<string[]> {
   const paths: string[] = [];
@@ -132,6 +172,66 @@ function registerFileTreeIpc(): void {
 
     return collectProjectPaths(rootPath);
   });
+
+  ipcMain.handle(
+    "file-tree:preview",
+    async (
+      event,
+      options?: { rootPath?: unknown; filePath?: unknown },
+    ): Promise<FilePreviewResult> => {
+      if (!validateSender(event.senderFrame)) return { status: "not-found" };
+      if (
+        typeof options?.rootPath !== "string" ||
+        options.rootPath.length === 0 ||
+        typeof options.filePath !== "string" ||
+        options.filePath.length === 0
+      ) {
+        return { status: "not-found" };
+      }
+
+      const rootPath = resolve(options.rootPath);
+      const absoluteFilePath = resolve(rootPath, options.filePath);
+
+      if (!isPathInsideRoot(rootPath, absoluteFilePath)) {
+        return { status: "not-found" };
+      }
+
+      try {
+        const fileStat = await stat(absoluteFilePath);
+
+        if (fileStat.isDirectory()) return { status: "directory" };
+        if (!fileStat.isFile()) return { status: "not-found" };
+        if (fileStat.size > FILE_PREVIEW_MAX_BYTES) {
+          return { status: "too-large", maxBytes: FILE_PREVIEW_MAX_BYTES };
+        }
+
+        const extensionStart = options.filePath.lastIndexOf(".");
+        const extension =
+          extensionStart >= 0
+            ? options.filePath.toLowerCase().slice(extensionStart)
+            : "";
+
+        if (IMAGE_EXTENSIONS.has(extension)) return { status: "binary" };
+
+        const contentBuffer = await readFile(absoluteFilePath);
+
+        if (hasBinaryBytes(contentBuffer)) return { status: "binary" };
+
+        return { status: "ok", content: contentBuffer.toString("utf8") };
+      } catch (error) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as NodeJS.ErrnoException).code === "ENOENT"
+        ) {
+          return { status: "not-found" };
+        }
+
+        return { status: "unavailable", message: "File is unavailable." };
+      }
+    },
+  );
 }
 
 function registerTerminalIpc(): void {

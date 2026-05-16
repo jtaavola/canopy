@@ -9,6 +9,11 @@ const api = {
   fileTree: {
     list: (rootPath: string) =>
       ipcRenderer.invoke("file-tree:list", rootPath) as Promise<string[]>,
+    preview: (rootPath: string, filePath: string) =>
+      ipcRenderer.invoke("file-tree:preview", {
+        rootPath,
+        filePath,
+      }) as Promise<import("./index.d").FilePreviewResult>,
   },
   terminal: {
     start: (options: { cols: number; rows: number; cwd: string }) =>
@@ -53,8 +58,6 @@ if (process.contextIsolated) {
     console.error(error);
   }
 } else {
-  // @ts-expect-error (define in dts)
   window.electron = electronAPI;
-  // @ts-expect-error (define in dts)
   window.api = api;
 }
