@@ -1,5 +1,10 @@
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import { Button } from "@renderer/components/ui/button";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@renderer/components/ui/resizable";
 import { cn } from "@renderer/lib/utils";
 import {
   IconLayoutSidebar,
@@ -35,7 +40,7 @@ function ProjectManager({
   return (
     <aside
       id="project-manager"
-      className="flex min-h-0 w-60 shrink-0 flex-col border-neutral-800 border-r bg-neutral-900"
+      className="flex size-full min-h-0 flex-col bg-neutral-900"
       aria-label="Open projects"
     >
       <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-neutral-800 border-b py-0 pr-2 pl-3 font-bold text-neutral-400 text-xs uppercase tracking-widest">
@@ -144,7 +149,7 @@ function ProjectExplorer({
   return (
     <aside
       id="project-explorer"
-      className="explorer-panel"
+      className="flex size-full min-h-0 flex-col bg-neutral-950"
       aria-label="Project file explorer"
     >
       <div className="explorer-header">
@@ -166,6 +171,8 @@ function App(): React.JSX.Element {
   const [openProjectError, setOpenProjectError] = useState<string | null>(null);
   const [isProjectManagerVisible, setIsProjectManagerVisible] = useState(true);
   const [isExplorerVisible, setIsExplorerVisible] = useState(true);
+  const [projectManagerSize, setProjectManagerSize] = useState("20%");
+  const [explorerSize, setExplorerSize] = useState("25%");
 
   useEffect(() => {
     const terminalElement = terminalElementRef.current;
@@ -319,24 +326,62 @@ function App(): React.JSX.Element {
       </header>
       <div className="workspace-shell">
         {activeProjectPath ? (
-          <>
+          <ResizablePanelGroup orientation="horizontal" className="min-h-0">
             {isProjectManagerVisible ? (
-              <ProjectManager
-                projectPaths={projectPaths}
-                activeProjectPath={activeProjectPath}
-                isOpeningProject={isOpeningProject}
-                onOpenProject={openProject}
-                onSelectProject={setActiveProjectPath}
-                onRemoveProject={removeProject}
-              />
+              <>
+                <ResizablePanel
+                  id="project-manager-panel"
+                  defaultSize={projectManagerSize}
+                  minSize="10%"
+                  maxSize="40%"
+                  onResize={(size) =>
+                    setProjectManagerSize(`${size.asPercentage}%`)
+                  }
+                  className="min-w-0"
+                >
+                  <ProjectManager
+                    projectPaths={projectPaths}
+                    activeProjectPath={activeProjectPath}
+                    isOpeningProject={isOpeningProject}
+                    onOpenProject={openProject}
+                    onSelectProject={setActiveProjectPath}
+                    onRemoveProject={removeProject}
+                  />
+                </ResizablePanel>
+                <ResizableHandle
+                  withHandle
+                  className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700"
+                />
+              </>
             ) : null}
-            <section className="terminal-shell" aria-label="Terminal">
-              <div ref={terminalElementRef} className="terminal-container" />
-            </section>
+            <ResizablePanel
+              id="terminal-panel"
+              minSize="30%"
+              className="min-w-0"
+            >
+              <section className="terminal-shell" aria-label="Terminal">
+                <div ref={terminalElementRef} className="terminal-container" />
+              </section>
+            </ResizablePanel>
             {isExplorerVisible ? (
-              <ProjectExplorer projectPath={activeProjectPath} />
+              <>
+                <ResizableHandle
+                  withHandle
+                  className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700"
+                />
+                <ResizablePanel
+                  id="project-explorer-panel"
+                  defaultSize={explorerSize}
+                  minSize="10%"
+                  maxSize="40%"
+                  onResize={(size) => setExplorerSize(`${size.asPercentage}%`)}
+                  className="min-w-0"
+                >
+                  <ProjectExplorer projectPath={activeProjectPath} />
+                </ResizablePanel>
+              </>
             ) : null}
-          </>
+          </ResizablePanelGroup>
         ) : (
           <ProjectsLanding
             onOpenProject={openProject}
