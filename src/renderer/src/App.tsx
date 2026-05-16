@@ -394,7 +394,7 @@ function App(): React.JSX.Element {
             <ResizablePanel
               id="terminal-panel"
               minSize="30%"
-              className="min-w-0"
+              className="h-full min-w-0"
             >
               <section
                 className={cn("terminal-shell", selectedFilePath && "hidden")}
