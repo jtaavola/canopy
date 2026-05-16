@@ -1,24 +1,7 @@
+import { File } from "@pierre/diffs/react";
 import { Button } from "@renderer/components/ui/button";
 import { IconX } from "@tabler/icons-react";
-import * as monaco from "monaco-editor";
-import { useEffect, useRef, useState } from "react";
-
-function getMonacoLanguage(filePath: string): string {
-  const extension = filePath.toLowerCase().split(".").pop() ?? "";
-  const languages: Record<string, string> = {
-    css: "css",
-    html: "html",
-    js: "javascript",
-    jsx: "javascript",
-    json: "json",
-    jsonc: "json",
-    md: "markdown",
-    ts: "typescript",
-    tsx: "typescript",
-  };
-
-  return languages[extension] ?? "plaintext";
-}
+import { useEffect, useMemo, useState } from "react";
 
 export function FilePreview({
   projectPath,
@@ -29,7 +12,6 @@ export function FilePreview({
   filePath: string;
   onClose: () => void;
 }): React.JSX.Element {
-  const editorElementRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<Awaited<
     ReturnType<typeof window.api.fileTree.preview>
   > | null>(null);
@@ -61,22 +43,17 @@ export function FilePreview({
     };
   }, [filePath, projectPath]);
 
-  useEffect(() => {
-    const editorElement = editorElementRef.current;
-
-    if (!editorElement || preview?.status !== "ok") return;
-
-    const editor = monaco.editor.create(editorElement, {
-      value: preview.content,
-      language: getMonacoLanguage(filePath),
-      readOnly: true,
-      minimap: { enabled: false },
-      automaticLayout: true,
-      theme: "vs-dark",
-    });
-
-    return () => editor.dispose();
-  }, [filePath, preview]);
+  const renderedFile = useMemo(
+    () =>
+      preview?.status === "ok"
+        ? {
+            name: filePath,
+            contents: preview.content,
+            cacheKey: `${projectPath}:${filePath}:${preview.content.length}`,
+          }
+        : null,
+    [filePath, preview, projectPath],
+  );
 
   let message: string | null = null;
 
@@ -115,9 +92,20 @@ export function FilePreview({
         <div className="flex flex-1 items-center justify-center p-4 text-muted-foreground text-sm">
           {message}
         </div>
-      ) : (
-        <div ref={editorElementRef} className="min-h-0 flex-1" />
-      )}
+      ) : renderedFile ? (
+        <div className="min-h-0 flex-1 overflow-auto bg-[#0d1117]">
+          <File
+            file={renderedFile}
+            className="block min-h-full text-xs"
+            options={{
+              themeType: "dark",
+              overflow: "scroll",
+              disableFileHeader: true,
+            }}
+            disableWorkerPool
+          />
+        </div>
+      ) : null}
     </section>
   );
 }
