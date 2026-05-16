@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import os from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -197,7 +197,16 @@ function registerFileTreeIpc(): void {
       }
 
       try {
-        const fileStat = await stat(absoluteFilePath);
+        const [realRootPath, realFilePath] = await Promise.all([
+          realpath(rootPath),
+          realpath(absoluteFilePath),
+        ]);
+
+        if (!isPathInsideRoot(realRootPath, realFilePath)) {
+          return { status: "not-found" };
+        }
+
+        const fileStat = await stat(realFilePath);
 
         if (fileStat.isDirectory()) return { status: "directory" };
         if (!fileStat.isFile()) return { status: "not-found" };
@@ -213,7 +222,7 @@ function registerFileTreeIpc(): void {
 
         if (IMAGE_EXTENSIONS.has(extension)) return { status: "binary" };
 
-        const contentBuffer = await readFile(absoluteFilePath);
+        const contentBuffer = await readFile(realFilePath);
 
         if (hasBinaryBytes(contentBuffer)) return { status: "binary" };
 
