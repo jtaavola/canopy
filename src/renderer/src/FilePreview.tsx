@@ -1,3 +1,5 @@
+import { Button } from "@renderer/components/ui/button";
+import { IconX } from "@tabler/icons-react";
 import * as monaco from "monaco-editor";
 import { useEffect, useRef, useState } from "react";
 
@@ -21,9 +23,11 @@ function getMonacoLanguage(filePath: string): string {
 export function FilePreview({
   projectPath,
   filePath,
+  onClose,
 }: {
   projectPath: string;
   filePath: string;
+  onClose: () => void;
 }): React.JSX.Element {
   const editorElementRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<Awaited<
@@ -94,8 +98,18 @@ export function FilePreview({
       className="flex size-full min-h-0 flex-col bg-background"
       aria-label="File preview"
     >
-      <div className="flex h-11 shrink-0 items-center border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
-        <span className="truncate">{filePath}</span>
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
+        <span className="min-w-0 flex-1 truncate">{filePath}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Close file preview and return to terminal"
+          title="Close file preview"
+          onClick={onClose}
+        >
+          <IconX aria-hidden="true" data-icon="inline-start" />
+        </Button>
       </div>
       {message ? (
         <div className="flex flex-1 items-center justify-center p-4 text-muted-foreground text-sm">

@@ -396,19 +396,19 @@ function App(): React.JSX.Element {
               minSize="30%"
               className="min-w-0"
             >
+              <section
+                className={cn("terminal-shell", selectedFilePath && "hidden")}
+                aria-label="Terminal"
+              >
+                <div ref={terminalElementRef} className="terminal-container" />
+              </section>
               {selectedFilePath ? (
                 <FilePreview
                   projectPath={activeProjectPath}
                   filePath={selectedFilePath}
+                  onClose={() => setSelectedFilePath(null)}
                 />
-              ) : (
-                <section className="terminal-shell" aria-label="Terminal">
-                  <div
-                    ref={terminalElementRef}
-                    className="terminal-container"
-                  />
-                </section>
-              )}
+              ) : null}
             </ResizablePanel>
             {isExplorerVisible ? (
               <>
