@@ -1,3 +1,8 @@
+## Vocabulary
+
+- **Project**: the canonical Git repository root selected by the user.
+- **Tree**: a Canopy working session backed by a Git worktree.
+
 ## Agent skills
 
 ### Issue tracker
