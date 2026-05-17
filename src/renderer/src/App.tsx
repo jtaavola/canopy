@@ -259,18 +259,25 @@ function App(): React.JSX.Element {
 
     const resizeShell = (): void => {
       fitAddon.fit();
-      window.api.terminal.resize({ cols: terminal.cols, rows: terminal.rows });
+      window.api.terminal.resize(activeProjectPath, {
+        cols: terminal.cols,
+        rows: terminal.rows,
+      });
     };
 
     const resizeObserver = new ResizeObserver(resizeShell);
     const removeDataListener = window.api.terminal.onData((data) =>
       terminal.write(data),
     );
-    const removeExitListener = window.api.terminal.onExit(({ exitCode }) => {
-      terminal.writeln(`\r\n[process exited with code ${exitCode}]`);
-    });
+    const removeExitListener = window.api.terminal.onExit(
+      ({ terminalId, exitCode }) => {
+        if (terminalId === activeProjectPath) {
+          terminal.writeln(`\r\n[process exited with code ${exitCode}]`);
+        }
+      },
+    );
     const inputDisposable = terminal.onData((data) =>
-      window.api.terminal.write(data),
+      window.api.terminal.write(activeProjectPath, data),
     );
 
     resizeObserver.observe(terminalElement);
@@ -286,7 +293,6 @@ function App(): React.JSX.Element {
       inputDisposable.dispose();
       removeDataListener();
       removeExitListener();
-      window.api.terminal.dispose();
       terminal.dispose();
     };
   }, [activeProjectPath]);
@@ -327,6 +333,8 @@ function App(): React.JSX.Element {
   };
 
   const removeProject = (projectPathToRemove: string): void => {
+    window.api.terminal.dispose(projectPathToRemove);
+
     setProjectPaths((currentProjectPaths) => {
       const nextProjectPaths = currentProjectPaths.filter(
         (projectPath) => projectPath !== projectPathToRemove,

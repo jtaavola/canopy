@@ -29,10 +29,11 @@ const api = {
   terminal: {
     start: (options: { cols: number; rows: number; cwd: string }) =>
       ipcRenderer.invoke("terminal:start", options),
-    write: (data: string) => ipcRenderer.send("terminal:write", data),
-    resize: (size: { cols: number; rows: number }) =>
-      ipcRenderer.send("terminal:resize", size),
-    dispose: () => ipcRenderer.send("terminal:dispose"),
+    write: (terminalId: string, data: string) =>
+      ipcRenderer.send("terminal:write", { terminalId, data }),
+    resize: (terminalId: string, size: { cols: number; rows: number }) =>
+      ipcRenderer.send("terminal:resize", { terminalId, ...size }),
+    dispose: (terminalId: string) => ipcRenderer.send("terminal:dispose", terminalId),
     onData: (callback: (data: string) => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
@@ -44,11 +45,15 @@ const api = {
       return () => ipcRenderer.removeListener("terminal:data", listener);
     },
     onExit: (
-      callback: (event: { exitCode: number; signal?: number }) => void,
+      callback: (event: {
+        terminalId: string;
+        exitCode: number;
+        signal?: number;
+      }) => void,
     ) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        exitEvent: { exitCode: number; signal?: number },
+        exitEvent: { terminalId: string; exitCode: number; signal?: number },
       ): void => callback(exitEvent);
 
       ipcRenderer.on("terminal:exit", listener);
