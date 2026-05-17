@@ -607,8 +607,12 @@ async function openProjectFromPath(
     (project) => project.rootPath === rootPath,
   );
   if (existingProject) {
+    const tree =
+      existingProject.trees[0] ?? (await createInitialTree(existingProject));
+    if (existingProject.trees.length === 0) existingProject.trees.push(tree);
+
     state.activeProjectId = existingProject.id;
-    state.activeTreeId = existingProject.trees[0]?.id ?? null;
+    state.activeTreeId = tree.id;
     await saveWorkspaceState(state);
     return state;
   }
