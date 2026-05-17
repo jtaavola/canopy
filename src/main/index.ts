@@ -18,7 +18,10 @@ import icon from "../../resources/icon.png?asset";
 
 const execFileAsync = promisify(execFile);
 
-const terminals = new Map<number, pty.IPty>();
+const terminals = new Map<string, pty.IPty>();
+const terminalBuffers = new Map<string, string[]>();
+const activeTerminalsByWebContents = new Map<number, string>();
+const TERMINAL_BUFFER_CHUNK_LIMIT = 1000;
 
 const EXCLUDED_TREE_ENTRIES = new Set([
   ".git",
@@ -218,13 +221,23 @@ function getShell(): string {
   );
 }
 
-function cleanupTerminal(webContentsId: number): void {
-  const terminal = terminals.get(webContentsId);
+function cleanupTerminal(terminalId: string): void {
+  const terminal = terminals.get(terminalId);
 
-  if (!terminal) return;
+  if (terminal) {
+    terminal.kill();
+    terminals.delete(terminalId);
+  }
 
-  terminal.kill();
-  terminals.delete(webContentsId);
+  terminalBuffers.delete(terminalId);
+}
+
+function cleanupWebContentsTerminals(webContentsId: number): void {
+  activeTerminalsByWebContents.delete(webContentsId);
+
+  for (const terminalId of terminals.keys()) {
+    cleanupTerminal(terminalId);
+  }
 }
 
 function normalizeTerminalDimension(value: unknown, fallback: number): number {
@@ -401,65 +414,101 @@ function registerTerminalIpc(): void {
       if (!validateSender(event.senderFrame)) return;
 
       const webContentsId = event.sender.id;
+      const terminalId =
+        typeof options?.cwd === "string" && options.cwd.length > 0
+          ? options.cwd
+          : os.homedir();
 
-      cleanupTerminal(webContentsId);
+      activeTerminalsByWebContents.set(webContentsId, terminalId);
+
+      const existingTerminal = terminals.get(terminalId);
+      if (existingTerminal) {
+        existingTerminal.resize(
+          normalizeTerminalDimension(options?.cols, existingTerminal.cols),
+          normalizeTerminalDimension(options?.rows, existingTerminal.rows),
+        );
+        for (const data of terminalBuffers.get(terminalId) ?? []) {
+          if (event.sender.isDestroyed()) break;
+          event.sender.send("terminal:data", data);
+        }
+        return;
+      }
 
       const shellPath = getShell();
       const terminal = pty.spawn(shellPath, [], {
         name: "xterm-256color",
         cols: normalizeTerminalDimension(options?.cols, 80),
         rows: normalizeTerminalDimension(options?.rows, 24),
-        cwd:
-          typeof options?.cwd === "string" && options.cwd.length > 0
-            ? options.cwd
-            : os.homedir(),
+        cwd: terminalId,
         env: process.env,
       });
 
-      terminals.set(webContentsId, terminal);
+      terminals.set(terminalId, terminal);
+      terminalBuffers.set(terminalId, []);
 
       terminal.onData((data) => {
-        if (!event.sender.isDestroyed()) {
+        const buffer = terminalBuffers.get(terminalId) ?? [];
+        buffer.push(data);
+        if (buffer.length > TERMINAL_BUFFER_CHUNK_LIMIT) buffer.shift();
+        terminalBuffers.set(terminalId, buffer);
+        if (
+          !event.sender.isDestroyed() &&
+          activeTerminalsByWebContents.get(webContentsId) === terminalId
+        ) {
           event.sender.send("terminal:data", data);
         }
       });
 
       terminal.onExit(({ exitCode, signal }) => {
-        terminals.delete(webContentsId);
+        terminals.delete(terminalId);
 
         if (!event.sender.isDestroyed()) {
-          event.sender.send("terminal:exit", { exitCode, signal });
+          event.sender.send("terminal:exit", { terminalId, exitCode, signal });
         }
       });
     },
   );
 
-  ipcMain.on("terminal:write", (event, data: string) => {
-    if (!validateSender(event.senderFrame)) return;
+  ipcMain.on(
+    "terminal:write",
+    (event, options?: { terminalId?: unknown; data?: unknown }) => {
+      if (!validateSender(event.senderFrame)) return;
+      if (
+        typeof options?.terminalId !== "string" ||
+        typeof options.data !== "string"
+      ) {
+        return;
+      }
 
-    terminals.get(event.sender.id)?.write(data);
-  });
+      terminals.get(options.terminalId)?.write(options.data);
+    },
+  );
 
   ipcMain.on(
     "terminal:resize",
-    (event, size?: { cols?: unknown; rows?: unknown }) => {
+    (
+      event,
+      size?: { terminalId?: unknown; cols?: unknown; rows?: unknown },
+    ) => {
       if (!validateSender(event.senderFrame)) return;
+      if (typeof size?.terminalId !== "string") return;
 
-      const terminal = terminals.get(event.sender.id);
+      const terminal = terminals.get(size.terminalId);
 
       if (!terminal) return;
 
-      const cols = normalizeTerminalDimension(size?.cols, terminal.cols);
-      const rows = normalizeTerminalDimension(size?.rows, terminal.rows);
+      const cols = normalizeTerminalDimension(size.cols, terminal.cols);
+      const rows = normalizeTerminalDimension(size.rows, terminal.rows);
 
       terminal.resize(cols, rows);
     },
   );
 
-  ipcMain.on("terminal:dispose", (event) => {
+  ipcMain.on("terminal:dispose", (event, terminalId?: unknown) => {
     if (!validateSender(event.senderFrame)) return;
+    if (typeof terminalId !== "string") return;
 
-    cleanupTerminal(event.sender.id);
+    cleanupTerminal(terminalId);
   });
 }
 
@@ -483,7 +532,7 @@ function createWindow(): void {
   const mainWindowWebContentsId = mainWindow.webContents.id;
 
   mainWindow.on("closed", () => {
-    cleanupTerminal(mainWindowWebContentsId);
+    cleanupWebContentsTerminals(mainWindowWebContentsId);
   });
 
   mainWindow.on("ready-to-show", () => {

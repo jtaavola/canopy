@@ -47,12 +47,12 @@ export interface TerminalApi {
     rows: number;
     cwd: string;
   }) => Promise<void>;
-  write: (data: string) => void;
-  resize: (size: { cols: number; rows: number }) => void;
-  dispose: () => void;
+  write: (terminalId: string, data: string) => void;
+  resize: (terminalId: string, size: { cols: number; rows: number }) => void;
+  dispose: (terminalId: string) => void;
   onData: (callback: (data: string) => void) => () => void;
   onExit: (
-    callback: (event: { exitCode: number; signal?: number }) => void,
+    callback: (event: { terminalId: string; exitCode: number; signal?: number }) => void,
   ) => () => void;
 }
 
