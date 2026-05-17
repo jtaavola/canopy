@@ -598,6 +598,24 @@ async function createInitialTree(
   };
 }
 
+async function createTreeForProject(
+  projectIdToUpdate: string,
+): Promise<WorkspaceState> {
+  const state = await loadWorkspaceState();
+  const project = state.projects.find(
+    (candidate) => candidate.id === projectIdToUpdate,
+  );
+
+  if (!project) throw new Error("Project is no longer open.");
+
+  const tree = await createInitialTree(project);
+  project.trees.push(tree);
+  state.activeProjectId = project.id;
+  state.activeTreeId = tree.id;
+  await saveWorkspaceState(state);
+  return state;
+}
+
 async function openProjectFromPath(
   selectedPath: string,
 ): Promise<WorkspaceState> {
@@ -690,6 +708,21 @@ function registerProjectIpc(): void {
     const selectedPath = result.filePaths[0];
     return selectedPath ? openProjectFromPath(selectedPath) : null;
   });
+
+  ipcMain.handle(
+    "project:create-tree",
+    async (event, projectIdToUpdate?: unknown) => {
+      if (!validateSender(event.senderFrame)) return DEFAULT_WORKSPACE_STATE;
+      if (
+        typeof projectIdToUpdate !== "string" ||
+        projectIdToUpdate.length === 0
+      ) {
+        throw new Error("Choose a project before creating a tree.");
+      }
+
+      return createTreeForProject(projectIdToUpdate);
+    },
+  );
 }
 
 function registerFileTreeIpc(): void {

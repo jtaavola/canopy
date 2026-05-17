@@ -16,6 +16,10 @@ const api = {
       ipcRenderer.invoke("project:open") as Promise<
         import("./index.d").WorkspaceState | null
       >,
+    createTree: (projectId: string) =>
+      ipcRenderer.invoke("project:create-tree", projectId) as Promise<
+        import("./index.d").WorkspaceState
+      >,
   },
   fileTree: {
     list: (rootPath: string) =>

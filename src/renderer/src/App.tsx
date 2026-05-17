@@ -15,6 +15,8 @@ import {
   IconLayoutSidebar,
   IconLayoutSidebarRight,
   IconPlus,
+  IconSeedling,
+  IconTrash,
   IconX,
 } from "@tabler/icons-react";
 import { FitAddon } from "@xterm/addon-fit";
@@ -35,17 +37,23 @@ function getUserFacingErrorMessage(error: unknown, fallback: string): string {
 function ProjectManager({
   projects,
   activeProjectId,
+  activeTreeId,
   isOpeningProject,
+  isCreatingTree,
   onOpenProject,
-  onSelectProject,
+  onCreateTree,
+  onSelectTree,
   onRemoveProject,
 }: {
   projects: readonly WorkspaceProject[];
   activeProjectId: string;
+  activeTreeId: string;
   isOpeningProject: boolean;
+  isCreatingTree: boolean;
   onOpenProject: () => void;
-  onSelectProject: (projectPath: string) => void;
-  onRemoveProject: (projectPath: string) => void;
+  onCreateTree: (projectId: string) => void;
+  onSelectTree: (projectId: string, treeId: string) => void;
+  onRemoveProject: (projectId: string) => void;
 }): React.JSX.Element {
   return (
     <aside
@@ -70,41 +78,98 @@ function ProjectManager({
       </div>
       <ul className="m-0 min-h-0 flex-1 overflow-auto p-2">
         {projects.map((project) => {
-          const isActive = project.id === activeProjectId;
+          const isActiveProject = project.id === activeProjectId;
 
           return (
-            <li key={project.id} className="relative mb-1 flex items-stretch">
-              <Button
-                type="button"
-                variant="ghost"
-                className={cn(
-                  "h-auto min-w-0 flex-1 flex-col items-start gap-0.5 rounded-lg border py-2 pr-9 pl-2.5 text-left hover:text-white",
-                  isActive
-                    ? "border-neutral-500 bg-neutral-700 text-white shadow-sm"
-                    : "border-transparent bg-transparent text-neutral-200 hover:bg-neutral-800",
-                )}
-                aria-current={isActive ? "page" : undefined}
-                title={project.rootPath}
-                onClick={() => onSelectProject(project.id)}
-              >
-                <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-sm">
-                  {project.name}
-                </span>
-                <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-neutral-500 text-xs">
-                  {project.rootPath}
-                </span>
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="absolute top-2 right-1.5 text-neutral-400 hover:bg-neutral-700 hover:text-white"
-                aria-label={`Remove ${project.name} from open projects`}
-                title="Remove from open projects"
-                onClick={() => onRemoveProject(project.id)}
-              >
-                <IconX aria-hidden="true" data-icon="inline-start" />
-              </Button>
+            <li key={project.id} className="mb-2">
+              <div className="group relative flex items-stretch">
+                <div
+                  className={cn(
+                    "flex h-auto min-w-0 flex-1 flex-col items-start gap-0.5 rounded-lg border py-2 pr-16 pl-2.5 text-left",
+                    "border-transparent bg-transparent text-neutral-200",
+                  )}
+                  title={project.rootPath}
+                >
+                  <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-sm">
+                    {project.name}
+                  </span>
+                  <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-neutral-500 text-xs">
+                    {project.rootPath}
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute top-2 right-8 opacity-0 text-neutral-400 transition-opacity hover:bg-neutral-700 hover:text-white group-hover:opacity-100 focus-visible:opacity-100"
+                  aria-label={`Create a new tree for ${project.name}`}
+                  title="New tree"
+                  disabled={isCreatingTree}
+                  onClick={() => onCreateTree(project.id)}
+                >
+                  <IconPlus aria-hidden="true" data-icon="inline-start" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute top-2 right-1.5 opacity-0 text-red-400 transition-opacity hover:bg-red-950 hover:text-red-200 group-hover:opacity-100 focus-visible:opacity-100"
+                  aria-label={`Remove ${project.name} from open projects`}
+                  title="Remove from open projects"
+                  onClick={() => onRemoveProject(project.id)}
+                >
+                  <IconTrash aria-hidden="true" data-icon="inline-start" />
+                </Button>
+              </div>
+              {project.trees.length > 0 ? (
+                <ul className="mt-1 ml-3 border-neutral-800 border-l pl-2">
+                  {project.trees.map((tree) => {
+                    const isActiveTree =
+                      isActiveProject && tree.id === activeTreeId;
+
+                    return (
+                      <li key={tree.id} className="mb-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className={cn(
+                            "h-auto w-full min-w-0 justify-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:text-white",
+                            isActiveTree
+                              ? "bg-neutral-700 text-white"
+                              : "text-neutral-300 hover:bg-neutral-800",
+                          )}
+                          aria-current={isActiveTree ? "page" : undefined}
+                          title={tree.worktreePath}
+                          onClick={() => onSelectTree(project.id, tree.id)}
+                        >
+                          <IconSeedling
+                            className="size-4 shrink-0 text-neutral-500"
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                            {tree.name}
+                          </span>
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : isActiveProject ? (
+                <div className="mt-1 ml-5 rounded-md border border-dashed border-neutral-800 p-2 text-neutral-500 text-xs">
+                  <div>No trees yet.</div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-1 h-7 px-2 text-neutral-200"
+                    disabled={isCreatingTree}
+                    onClick={() => onCreateTree(project.id)}
+                  >
+                    <IconPlus aria-hidden="true" data-icon="inline-start" />
+                    New tree
+                  </Button>
+                </div>
+              ) : null}
             </li>
           );
         })}
@@ -224,6 +289,32 @@ function ProjectExplorer({
   );
 }
 
+function EmptyProjectState({
+  projectName,
+  isCreatingTree,
+  onCreateTree,
+}: {
+  projectName: string;
+  isCreatingTree: boolean;
+  onCreateTree: () => void;
+}): React.JSX.Element {
+  return (
+    <section className="flex size-full flex-col items-center justify-center gap-3 bg-background p-8 text-center text-neutral-200">
+      <IconSeedling className="size-10 text-neutral-500" aria-hidden="true" />
+      <div>
+        <h2 className="font-semibold text-lg">{projectName} has no trees</h2>
+        <p className="mt-1 text-neutral-500 text-sm">
+          Create a tree to start a Git worktree-backed working session.
+        </p>
+      </div>
+      <Button type="button" onClick={onCreateTree} disabled={isCreatingTree}>
+        <IconPlus aria-hidden="true" data-icon="inline-start" />
+        New tree
+      </Button>
+    </section>
+  );
+}
+
 function App(): React.JSX.Element {
   const terminalElementRef = useRef<HTMLDivElement>(null);
   const [projects, setProjects] = useState<readonly WorkspaceProject[]>([]);
@@ -235,6 +326,7 @@ function App(): React.JSX.Element {
     string | null
   >(null);
   const [isOpeningProject, setIsOpeningProject] = useState(false);
+  const [isCreatingTree, setIsCreatingTree] = useState(false);
   const [openProjectError, setOpenProjectError] = useState<string | null>(null);
   const [isProjectManagerVisible, setIsProjectManagerVisible] = useState(true);
   const [isExplorerVisible, setIsExplorerVisible] = useState(true);
@@ -385,12 +477,31 @@ function App(): React.JSX.Element {
     }
   };
 
-  const selectProject = (projectId: string): void => {
-    const project = projects.find((candidate) => candidate.id === projectId);
+  const selectTree = (projectId: string, treeId: string): void => {
     setActiveProjectId(projectId);
-    setActiveTreeId(project?.trees[0]?.id ?? null);
+    setActiveTreeId(treeId);
     setSelectedFilePath(null);
     setSelectedChangedFilePath(null);
+  };
+
+  const createTree = async (projectId: string): Promise<void> => {
+    setIsCreatingTree(true);
+    setOpenProjectError(null);
+
+    try {
+      const workspaceState = await window.api.project.createTree(projectId);
+      setProjects(workspaceState.projects);
+      setActiveProjectId(workspaceState.activeProjectId);
+      setActiveTreeId(workspaceState.activeTreeId);
+      setSelectedFilePath(null);
+      setSelectedChangedFilePath(null);
+    } catch (unknownError: unknown) {
+      setOpenProjectError(
+        getUserFacingErrorMessage(unknownError, "Unable to create tree"),
+      );
+    } finally {
+      setIsCreatingTree(false);
+    }
   };
 
   const removeProject = (projectIdToRemove: string): void => {
@@ -433,7 +544,7 @@ function App(): React.JSX.Element {
   return (
     <main className="app-shell">
       <header className="app-header relative">
-        {activeWorktreePath ? (
+        {activeProject ? (
           <Button
             type="button"
             variant="ghost"
@@ -479,7 +590,7 @@ function App(): React.JSX.Element {
           </Button>
         ) : null}
       </header>
-      {openProjectError && activeWorktreePath ? (
+      {openProjectError && activeProject ? (
         <div
           role="alert"
           className="flex items-center justify-between gap-3 border-red-900/70 border-b bg-red-950 px-4 py-2 text-red-100 text-sm"
@@ -505,7 +616,7 @@ function App(): React.JSX.Element {
           >
             <Spinner aria-hidden="true" />
           </section>
-        ) : activeWorktreePath ? (
+        ) : activeProject ? (
           <ResizablePanelGroup orientation="horizontal" className="min-h-0">
             {isProjectManagerVisible ? (
               <>
@@ -522,9 +633,12 @@ function App(): React.JSX.Element {
                   <ProjectManager
                     projects={projects}
                     activeProjectId={activeProjectId ?? ""}
+                    activeTreeId={activeTreeId ?? ""}
                     isOpeningProject={isOpeningProject}
+                    isCreatingTree={isCreatingTree}
                     onOpenProject={openProject}
-                    onSelectProject={selectProject}
+                    onCreateTree={createTree}
+                    onSelectTree={selectTree}
                     onRemoveProject={removeProject}
                   />
                 </ResizablePanel>
@@ -536,31 +650,44 @@ function App(): React.JSX.Element {
               minSize="30%"
               className="h-full min-w-0"
             >
-              <section
-                className={cn(
-                  "terminal-shell",
-                  (selectedFilePath || selectedChangedFilePath) && "hidden",
-                )}
-                aria-label="Terminal"
-              >
-                <div ref={terminalElementRef} className="terminal-container" />
-              </section>
-              {selectedFilePath ? (
-                <FilePreview
-                  projectPath={activeWorktreePath}
-                  filePath={selectedFilePath}
-                  onClose={() => setSelectedFilePath(null)}
+              {activeWorktreePath ? (
+                <>
+                  <section
+                    className={cn(
+                      "terminal-shell",
+                      (selectedFilePath || selectedChangedFilePath) && "hidden",
+                    )}
+                    aria-label="Terminal"
+                  >
+                    <div
+                      ref={terminalElementRef}
+                      className="terminal-container"
+                    />
+                  </section>
+                  {selectedFilePath ? (
+                    <FilePreview
+                      projectPath={activeWorktreePath}
+                      filePath={selectedFilePath}
+                      onClose={() => setSelectedFilePath(null)}
+                    />
+                  ) : null}
+                  {selectedChangedFilePath ? (
+                    <ChangedDiff
+                      projectPath={activeWorktreePath}
+                      filePath={selectedChangedFilePath}
+                      onClose={() => setSelectedChangedFilePath(null)}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <EmptyProjectState
+                  projectName={activeProject.name}
+                  isCreatingTree={isCreatingTree}
+                  onCreateTree={() => createTree(activeProject.id)}
                 />
-              ) : null}
-              {selectedChangedFilePath ? (
-                <ChangedDiff
-                  projectPath={activeWorktreePath}
-                  filePath={selectedChangedFilePath}
-                  onClose={() => setSelectedChangedFilePath(null)}
-                />
-              ) : null}
+              )}
             </ResizablePanel>
-            {isExplorerVisible ? (
+            {isExplorerVisible && activeWorktreePath ? (
               <>
                 <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
                 <ResizablePanel
