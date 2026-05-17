@@ -1,9 +1,25 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
 
+export type WorkspaceTree = {
+  id: string;
+  name: string;
+  worktreePath: string;
+  branchName: string;
+};
+
+export type WorkspaceProject = {
+  id: string;
+  name: string;
+  rootPath: string;
+  slug: string;
+  trees: WorkspaceTree[];
+};
+
 export type WorkspaceState = {
   version: 1;
-  openProjectPaths: string[];
-  activeProjectPath: string | null;
+  projects: WorkspaceProject[];
+  activeProjectId: string | null;
+  activeTreeId: string | null;
 };
 
 export interface WorkspaceApi {
@@ -12,7 +28,7 @@ export interface WorkspaceApi {
 }
 
 export interface ProjectApi {
-  open: () => Promise<string | null>;
+  open: () => Promise<WorkspaceState | null>;
 }
 
 export type FilePreviewResult =
@@ -63,7 +79,11 @@ export interface TerminalApi {
   dispose: (terminalId: string) => void;
   onData: (callback: (data: string) => void) => () => void;
   onExit: (
-    callback: (event: { terminalId: string; exitCode: number; signal?: number }) => void,
+    callback: (event: {
+      terminalId: string;
+      exitCode: number;
+      signal?: number;
+    }) => void,
   ) => () => void;
 }
 

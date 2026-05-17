@@ -12,7 +12,10 @@ const api = {
       ipcRenderer.invoke("workspace:save", state) as Promise<void>,
   },
   project: {
-    open: () => ipcRenderer.invoke("project:open") as Promise<string | null>,
+    open: () =>
+      ipcRenderer.invoke("project:open") as Promise<
+        import("./index.d").WorkspaceState | null
+      >,
   },
   fileTree: {
     list: (rootPath: string) =>
@@ -41,7 +44,8 @@ const api = {
       ipcRenderer.send("terminal:write", { terminalId, data }),
     resize: (terminalId: string, size: { cols: number; rows: number }) =>
       ipcRenderer.send("terminal:resize", { terminalId, ...size }),
-    dispose: (terminalId: string) => ipcRenderer.send("terminal:dispose", terminalId),
+    dispose: (terminalId: string) =>
+      ipcRenderer.send("terminal:dispose", terminalId),
     onData: (callback: (data: string) => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
