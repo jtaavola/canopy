@@ -461,6 +461,7 @@ function registerTerminalIpc(): void {
 
       terminal.onExit(({ exitCode, signal }) => {
         terminals.delete(terminalId);
+        terminalBuffers.delete(terminalId);
 
         if (!event.sender.isDestroyed()) {
           event.sender.send("terminal:exit", { terminalId, exitCode, signal });
