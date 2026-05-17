@@ -295,10 +295,11 @@ async function loadWorkspaceState(): Promise<WorkspaceState> {
     return normalizeWorkspaceState(JSON.parse(content));
   } catch (error) {
     if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      (error as NodeJS.ErrnoException).code === "ENOENT"
+      error instanceof SyntaxError ||
+      (typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as NodeJS.ErrnoException).code === "ENOENT")
     ) {
       return DEFAULT_WORKSPACE_STATE;
     }
