@@ -343,6 +343,7 @@ function App(): React.JSX.Element {
       null,
     [activeProject, activeTreeId],
   );
+  const resolvedActiveTreeId = activeTree?.id ?? null;
   const activeWorktreePath = activeTree?.worktreePath ?? null;
 
   useEffect(() => {
@@ -384,14 +385,19 @@ function App(): React.JSX.Element {
         version: 1,
         projects: [...projects],
         activeProjectId,
-        activeTreeId,
+        activeTreeId: resolvedActiveTreeId,
       })
       .catch((unknownError: unknown) => {
         setOpenProjectError(
           getUserFacingErrorMessage(unknownError, "Unable to save workspace"),
         );
       });
-  }, [activeProjectId, activeTreeId, hasLoadedWorkspaceState, projects]);
+  }, [
+    activeProjectId,
+    hasLoadedWorkspaceState,
+    projects,
+    resolvedActiveTreeId,
+  ]);
 
   useEffect(() => {
     const terminalElement = terminalElementRef.current;
@@ -633,7 +639,7 @@ function App(): React.JSX.Element {
                   <ProjectManager
                     projects={projects}
                     activeProjectId={activeProjectId ?? ""}
-                    activeTreeId={activeTreeId ?? ""}
+                    activeTreeId={resolvedActiveTreeId ?? ""}
                     isOpeningProject={isOpeningProject}
                     isCreatingTree={isCreatingTree}
                     onOpenProject={openProject}
