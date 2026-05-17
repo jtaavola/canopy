@@ -249,3 +249,8 @@ body {
 .terminal-container .xterm {
   height: 100%;
 }
+
+.terminal-container .xterm .xterm-rows > div {
+  box-sizing: content-box;
+  padding-right: 2px;
+}
