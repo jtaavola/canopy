@@ -3,6 +3,14 @@ import { contextBridge, ipcRenderer } from "electron";
 
 // Custom APIs for renderer
 const api = {
+  workspace: {
+    load: () =>
+      ipcRenderer.invoke("workspace:load") as Promise<
+        import("./index.d").WorkspaceState
+      >,
+    save: (state: import("./index.d").WorkspaceState) =>
+      ipcRenderer.invoke("workspace:save", state) as Promise<void>,
+  },
   project: {
     open: () => ipcRenderer.invoke("project:open") as Promise<string | null>,
   },

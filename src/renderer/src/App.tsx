@@ -4,6 +4,7 @@ import {
   useFileTreeSelection,
 } from "@pierre/trees/react";
 import { Button } from "@renderer/components/ui/button";
+import { Spinner } from "@renderer/components/ui/spinner";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -226,6 +227,7 @@ function App(): React.JSX.Element {
   const [activeProjectPath, setActiveProjectPath] = useState<string | null>(
     null,
   );
+  const [hasLoadedWorkspaceState, setHasLoadedWorkspaceState] = useState(false);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<
     string | null
@@ -236,6 +238,53 @@ function App(): React.JSX.Element {
   const [isExplorerVisible, setIsExplorerVisible] = useState(true);
   const [projectManagerSize, setProjectManagerSize] = useState("20%");
   const [explorerSize, setExplorerSize] = useState("25%");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    window.api.workspace
+      .load()
+      .then((workspaceState) => {
+        if (!isMounted) return;
+
+        setProjectPaths(workspaceState.openProjectPaths);
+        setActiveProjectPath(workspaceState.activeProjectPath);
+      })
+      .catch((unknownError: unknown) => {
+        if (!isMounted) return;
+
+        setOpenProjectError(
+          unknownError instanceof Error
+            ? unknownError.message
+            : "Unable to restore workspace",
+        );
+      })
+      .finally(() => {
+        if (isMounted) setHasLoadedWorkspaceState(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedWorkspaceState) return;
+
+    window.api.workspace
+      .save({
+        version: 1,
+        openProjectPaths: [...projectPaths],
+        activeProjectPath,
+      })
+      .catch((unknownError: unknown) => {
+        setOpenProjectError(
+          unknownError instanceof Error
+            ? unknownError.message
+            : "Unable to save workspace",
+        );
+      });
+  }, [activeProjectPath, hasLoadedWorkspaceState, projectPaths]);
 
   useEffect(() => {
     const terminalElement = terminalElementRef.current;
@@ -416,7 +465,14 @@ function App(): React.JSX.Element {
         ) : null}
       </header>
       <div className="workspace-shell">
-        {activeProjectPath ? (
+        {!hasLoadedWorkspaceState ? (
+          <section
+            className="flex min-w-0 flex-1 items-center justify-center bg-background"
+            aria-label="Loading workspace"
+          >
+            <Spinner aria-hidden="true" />
+          </section>
+        ) : activeProjectPath ? (
           <ResizablePanelGroup orientation="horizontal" className="min-h-0">
             {isProjectManagerVisible ? (
               <>

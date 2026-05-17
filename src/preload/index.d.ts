@@ -1,5 +1,16 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
 
+export type WorkspaceState = {
+  version: 1;
+  openProjectPaths: string[];
+  activeProjectPath: string | null;
+};
+
+export interface WorkspaceApi {
+  load: () => Promise<WorkspaceState>;
+  save: (state: WorkspaceState) => Promise<void>;
+}
+
 export interface ProjectApi {
   open: () => Promise<string | null>;
 }
@@ -60,6 +71,7 @@ declare global {
   interface Window {
     electron: ElectronAPI;
     api: {
+      workspace: WorkspaceApi;
       project: ProjectApi;
       fileTree: FileTreeApi;
       gitChanges: GitChangesApi;
