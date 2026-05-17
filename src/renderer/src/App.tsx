@@ -4,12 +4,12 @@ import {
   useFileTreeSelection,
 } from "@pierre/trees/react";
 import { Button } from "@renderer/components/ui/button";
-import { Spinner } from "@renderer/components/ui/spinner";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@renderer/components/ui/resizable";
+import { Spinner } from "@renderer/components/ui/spinner";
 import { cn } from "@renderer/lib/utils";
 import {
   IconLayoutSidebar,
@@ -18,27 +18,30 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { FitAddon } from "@xterm/addon-fit";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Terminal } from "xterm";
+import type { WorkspaceProject } from "../../preload/index.d";
 import { ChangedDiff, ChangedFilesList } from "./ChangedFiles";
 import { FilePreview } from "./FilePreview";
 import ProjectsLanding from "./ProjectsLanding";
 import "xterm/css/xterm.css";
 
-function getProjectName(projectPath: string): string {
-  return projectPath.split(/[\\/]/).filter(Boolean).at(-1) ?? projectPath;
+function getUserFacingErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : fallback;
+
+  return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
 }
 
 function ProjectManager({
-  projectPaths,
-  activeProjectPath,
+  projects,
+  activeProjectId,
   isOpeningProject,
   onOpenProject,
   onSelectProject,
   onRemoveProject,
 }: {
-  projectPaths: readonly string[];
-  activeProjectPath: string;
+  projects: readonly WorkspaceProject[];
+  activeProjectId: string;
   isOpeningProject: boolean;
   onOpenProject: () => void;
   onSelectProject: (projectPath: string) => void;
@@ -66,11 +69,11 @@ function ProjectManager({
         </Button>
       </div>
       <ul className="m-0 min-h-0 flex-1 overflow-auto p-2">
-        {projectPaths.map((projectPath) => {
-          const isActive = projectPath === activeProjectPath;
+        {projects.map((project) => {
+          const isActive = project.id === activeProjectId;
 
           return (
-            <li key={projectPath} className="relative mb-1 flex items-stretch">
+            <li key={project.id} className="relative mb-1 flex items-stretch">
               <Button
                 type="button"
                 variant="ghost"
@@ -81,14 +84,14 @@ function ProjectManager({
                     : "border-transparent bg-transparent text-neutral-200 hover:bg-neutral-800",
                 )}
                 aria-current={isActive ? "page" : undefined}
-                title={projectPath}
-                onClick={() => onSelectProject(projectPath)}
+                title={project.rootPath}
+                onClick={() => onSelectProject(project.id)}
               >
                 <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-sm">
-                  {getProjectName(projectPath)}
+                  {project.name}
                 </span>
                 <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-neutral-500 text-xs">
-                  {projectPath}
+                  {project.rootPath}
                 </span>
               </Button>
               <Button
@@ -96,9 +99,9 @@ function ProjectManager({
                 variant="ghost"
                 size="icon-xs"
                 className="absolute top-2 right-1.5 text-neutral-400 hover:bg-neutral-700 hover:text-white"
-                aria-label={`Remove ${getProjectName(projectPath)} from open projects`}
+                aria-label={`Remove ${project.name} from open projects`}
                 title="Remove from open projects"
-                onClick={() => onRemoveProject(projectPath)}
+                onClick={() => onRemoveProject(project.id)}
               >
                 <IconX aria-hidden="true" data-icon="inline-start" />
               </Button>
@@ -223,10 +226,9 @@ function ProjectExplorer({
 
 function App(): React.JSX.Element {
   const terminalElementRef = useRef<HTMLDivElement>(null);
-  const [projectPaths, setProjectPaths] = useState<readonly string[]>([]);
-  const [activeProjectPath, setActiveProjectPath] = useState<string | null>(
-    null,
-  );
+  const [projects, setProjects] = useState<readonly WorkspaceProject[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activeTreeId, setActiveTreeId] = useState<string | null>(null);
   const [hasLoadedWorkspaceState, setHasLoadedWorkspaceState] = useState(false);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedChangedFilePath, setSelectedChangedFilePath] = useState<
@@ -238,6 +240,18 @@ function App(): React.JSX.Element {
   const [isExplorerVisible, setIsExplorerVisible] = useState(true);
   const [projectManagerSize, setProjectManagerSize] = useState("20%");
   const [explorerSize, setExplorerSize] = useState("25%");
+  const activeProject = useMemo(
+    () => projects.find((project) => project.id === activeProjectId) ?? null,
+    [activeProjectId, projects],
+  );
+  const activeTree = useMemo(
+    () =>
+      activeProject?.trees.find((tree) => tree.id === activeTreeId) ??
+      activeProject?.trees[0] ??
+      null,
+    [activeProject, activeTreeId],
+  );
+  const activeWorktreePath = activeTree?.worktreePath ?? null;
 
   useEffect(() => {
     let isMounted = true;
@@ -247,16 +261,18 @@ function App(): React.JSX.Element {
       .then((workspaceState) => {
         if (!isMounted) return;
 
-        setProjectPaths(workspaceState.openProjectPaths);
-        setActiveProjectPath(workspaceState.activeProjectPath);
+        setProjects(workspaceState.projects);
+        setActiveProjectId(workspaceState.activeProjectId);
+        setActiveTreeId(workspaceState.activeTreeId);
       })
       .catch((unknownError: unknown) => {
         if (!isMounted) return;
 
         setOpenProjectError(
-          unknownError instanceof Error
-            ? unknownError.message
-            : "Unable to restore workspace",
+          getUserFacingErrorMessage(
+            unknownError,
+            "Unable to restore workspace",
+          ),
         );
       })
       .finally(() => {
@@ -274,22 +290,21 @@ function App(): React.JSX.Element {
     window.api.workspace
       .save({
         version: 1,
-        openProjectPaths: [...projectPaths],
-        activeProjectPath,
+        projects: [...projects],
+        activeProjectId,
+        activeTreeId,
       })
       .catch((unknownError: unknown) => {
         setOpenProjectError(
-          unknownError instanceof Error
-            ? unknownError.message
-            : "Unable to save workspace",
+          getUserFacingErrorMessage(unknownError, "Unable to save workspace"),
         );
       });
-  }, [activeProjectPath, hasLoadedWorkspaceState, projectPaths]);
+  }, [activeProjectId, activeTreeId, hasLoadedWorkspaceState, projects]);
 
   useEffect(() => {
     const terminalElement = terminalElementRef.current;
 
-    if (!terminalElement || !activeProjectPath) return;
+    if (!terminalElement || !activeWorktreePath) return;
 
     const terminal = new Terminal({
       cursorBlink: true,
@@ -308,7 +323,7 @@ function App(): React.JSX.Element {
 
     const resizeShell = (): void => {
       fitAddon.fit();
-      window.api.terminal.resize(activeProjectPath, {
+      window.api.terminal.resize(activeWorktreePath, {
         cols: terminal.cols,
         rows: terminal.rows,
       });
@@ -320,13 +335,13 @@ function App(): React.JSX.Element {
     );
     const removeExitListener = window.api.terminal.onExit(
       ({ terminalId, exitCode }) => {
-        if (terminalId === activeProjectPath) {
+        if (terminalId === activeWorktreePath) {
           terminal.writeln(`\r\n[process exited with code ${exitCode}]`);
         }
       },
     );
     const inputDisposable = terminal.onData((data) =>
-      window.api.terminal.write(activeProjectPath, data),
+      window.api.terminal.write(activeWorktreePath, data),
     );
 
     resizeObserver.observe(terminalElement);
@@ -334,7 +349,7 @@ function App(): React.JSX.Element {
     window.api.terminal.start({
       cols: terminal.cols,
       rows: terminal.rows,
-      cwd: activeProjectPath,
+      cwd: activeWorktreePath,
     });
 
     return () => {
@@ -344,62 +359,60 @@ function App(): React.JSX.Element {
       removeExitListener();
       terminal.dispose();
     };
-  }, [activeProjectPath]);
+  }, [activeWorktreePath]);
 
   const openProject = async (): Promise<void> => {
     setIsOpeningProject(true);
     setOpenProjectError(null);
 
     try {
-      const selectedProjectPath = await window.api.project.open();
+      const workspaceState = await window.api.project.open();
 
-      if (selectedProjectPath) {
-        setProjectPaths((currentProjectPaths) =>
-          currentProjectPaths.includes(selectedProjectPath)
-            ? currentProjectPaths
-            : [...currentProjectPaths, selectedProjectPath],
-        );
-        setActiveProjectPath(selectedProjectPath);
+      if (workspaceState) {
+        setProjects(workspaceState.projects);
+        setActiveProjectId(workspaceState.activeProjectId);
+        setActiveTreeId(workspaceState.activeTreeId);
         setSelectedFilePath(null);
         setSelectedChangedFilePath(null);
         setIsProjectManagerVisible(true);
       }
     } catch (unknownError: unknown) {
       setOpenProjectError(
-        unknownError instanceof Error
-          ? unknownError.message
-          : "Unable to open project",
+        getUserFacingErrorMessage(unknownError, "Unable to open project"),
       );
     } finally {
       setIsOpeningProject(false);
     }
   };
 
-  const selectProject = (projectPath: string): void => {
-    setActiveProjectPath(projectPath);
+  const selectProject = (projectId: string): void => {
+    const project = projects.find((candidate) => candidate.id === projectId);
+    setActiveProjectId(projectId);
+    setActiveTreeId(project?.trees[0]?.id ?? null);
     setSelectedFilePath(null);
     setSelectedChangedFilePath(null);
   };
 
-  const removeProject = (projectPathToRemove: string): void => {
-    window.api.terminal.dispose(projectPathToRemove);
+  const removeProject = (projectIdToRemove: string): void => {
+    const project = projects.find(
+      (candidate) => candidate.id === projectIdToRemove,
+    );
+    for (const tree of project?.trees ?? [])
+      window.api.terminal.dispose(tree.worktreePath);
 
-    setProjectPaths((currentProjectPaths) => {
-      const nextProjectPaths = currentProjectPaths.filter(
-        (projectPath) => projectPath !== projectPathToRemove,
+    setProjects((currentProjects) => {
+      const nextProjects = currentProjects.filter(
+        (project) => project.id !== projectIdToRemove,
       );
 
-      setActiveProjectPath((currentActiveProjectPath) => {
-        if (currentActiveProjectPath !== projectPathToRemove) {
-          return currentActiveProjectPath;
-        }
-
+      if (activeProjectId === projectIdToRemove) {
         setSelectedFilePath(null);
         setSelectedChangedFilePath(null);
-        return nextProjectPaths[0] ?? null;
-      });
+        setActiveProjectId(nextProjects[0]?.id ?? null);
+        setActiveTreeId(nextProjects[0]?.trees[0]?.id ?? null);
+      }
 
-      return nextProjectPaths;
+      return nextProjects;
     });
   };
 
@@ -420,7 +433,7 @@ function App(): React.JSX.Element {
   return (
     <main className="app-shell">
       <header className="app-header relative">
-        {activeProjectPath ? (
+        {activeWorktreePath ? (
           <Button
             type="button"
             variant="ghost"
@@ -442,9 +455,11 @@ function App(): React.JSX.Element {
         ) : null}
         <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center font-semibold text-neutral-100 text-sm tracking-tight">
           Canopy
-          {activeProjectPath ? ` · ${getProjectName(activeProjectPath)}` : ""}
+          {activeProject
+            ? ` · ${activeProject.name}${activeTree ? ` · ${activeTree.name}` : ""}`
+            : ""}
         </div>
-        {activeProjectPath ? (
+        {activeWorktreePath ? (
           <Button
             type="button"
             variant="ghost"
@@ -464,6 +479,24 @@ function App(): React.JSX.Element {
           </Button>
         ) : null}
       </header>
+      {openProjectError && activeWorktreePath ? (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 border-red-900/70 border-b bg-red-950 px-4 py-2 text-red-100 text-sm"
+        >
+          <span>{openProjectError}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-red-100 hover:bg-red-900/60 hover:text-white"
+            aria-label="Dismiss project error"
+            onClick={() => setOpenProjectError(null)}
+          >
+            <IconX aria-hidden="true" data-icon="inline-start" />
+          </Button>
+        </div>
+      ) : null}
       <div className="workspace-shell">
         {!hasLoadedWorkspaceState ? (
           <section
@@ -472,7 +505,7 @@ function App(): React.JSX.Element {
           >
             <Spinner aria-hidden="true" />
           </section>
-        ) : activeProjectPath ? (
+        ) : activeWorktreePath ? (
           <ResizablePanelGroup orientation="horizontal" className="min-h-0">
             {isProjectManagerVisible ? (
               <>
@@ -487,8 +520,8 @@ function App(): React.JSX.Element {
                   className="min-w-0"
                 >
                   <ProjectManager
-                    projectPaths={projectPaths}
-                    activeProjectPath={activeProjectPath}
+                    projects={projects}
+                    activeProjectId={activeProjectId ?? ""}
                     isOpeningProject={isOpeningProject}
                     onOpenProject={openProject}
                     onSelectProject={selectProject}
@@ -514,14 +547,14 @@ function App(): React.JSX.Element {
               </section>
               {selectedFilePath ? (
                 <FilePreview
-                  projectPath={activeProjectPath}
+                  projectPath={activeWorktreePath}
                   filePath={selectedFilePath}
                   onClose={() => setSelectedFilePath(null)}
                 />
               ) : null}
               {selectedChangedFilePath ? (
                 <ChangedDiff
-                  projectPath={activeProjectPath}
+                  projectPath={activeWorktreePath}
                   filePath={selectedChangedFilePath}
                   onClose={() => setSelectedChangedFilePath(null)}
                 />
@@ -539,7 +572,7 @@ function App(): React.JSX.Element {
                   className="min-w-0"
                 >
                   <ProjectExplorer
-                    projectPath={activeProjectPath}
+                    projectPath={activeWorktreePath}
                     onOpenFile={openFilePreview}
                     onOpenChangedFile={openChangedFilePreview}
                   />

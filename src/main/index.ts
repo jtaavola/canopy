@@ -1,5 +1,13 @@
 import { execFile } from "node:child_process";
-import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -60,17 +68,55 @@ type ChangedFile = {
   unstaged: boolean;
 };
 
+type WorkspaceTree = {
+  id: string;
+  name: string;
+  worktreePath: string;
+  branchName: string;
+};
+
+type WorkspaceProject = {
+  id: string;
+  name: string;
+  rootPath: string;
+  slug: string;
+  trees: WorkspaceTree[];
+};
+
 type WorkspaceState = {
   version: 1;
-  openProjectPaths: string[];
-  activeProjectPath: string | null;
+  projects: WorkspaceProject[];
+  activeProjectId: string | null;
+  activeTreeId: string | null;
 };
 
 const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   version: 1,
-  openProjectPaths: [],
-  activeProjectPath: null,
+  projects: [],
+  activeProjectId: null,
+  activeTreeId: null,
 };
+
+const TREE_NAMES = [
+  "alder",
+  "aspen",
+  "birch",
+  "cedar",
+  "cypress",
+  "dogwood",
+  "elm",
+  "fir",
+  "hemlock",
+  "juniper",
+  "larch",
+  "maple",
+  "oak",
+  "poplar",
+  "redwood",
+  "spruce",
+  "sycamore",
+  "willow",
+];
 
 type ChangedFilesResult =
   | { status: "ok"; files: ChangedFile[] }
@@ -264,28 +310,134 @@ function getWorkspaceStatePath(): string {
   return join(app.getPath("userData"), "workspace-state.json");
 }
 
+function hashId(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
+
+function projectId(rootPath: string): string {
+  return `project-${hashId(rootPath)}`;
+}
+
+function treeId(rootPath: string, treeName: string): string {
+  return `tree-${hashId(`${rootPath}:${treeName}`)}`;
+}
+
+function slugify(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "project"
+  );
+}
+
 function normalizeWorkspaceState(value: unknown): WorkspaceState {
   if (typeof value !== "object" || value === null) {
     return DEFAULT_WORKSPACE_STATE;
   }
 
-  const maybeState = value as {
+  const legacy = value as {
     openProjectPaths?: unknown;
     activeProjectPath?: unknown;
   };
-  const openProjectPaths = Array.isArray(maybeState.openProjectPaths)
-    ? [...new Set(maybeState.openProjectPaths.filter((path) => typeof path === "string" && path.length > 0))]
+  if (Array.isArray(legacy.openProjectPaths)) {
+    const projects = legacy.openProjectPaths
+      .filter(
+        (path): path is string => typeof path === "string" && path.length > 0,
+      )
+      .map((rootPath) => ({
+        id: projectId(rootPath),
+        name: rootPath.split(/[\\/]/).filter(Boolean).at(-1) ?? rootPath,
+        rootPath,
+        slug: slugify(
+          rootPath.split(/[\\/]/).filter(Boolean).at(-1) ?? rootPath,
+        ),
+        trees: [],
+      }));
+    const activeProject =
+      projects.find(
+        (project) => project.rootPath === legacy.activeProjectPath,
+      ) ?? projects[0];
+    return {
+      version: 1,
+      projects,
+      activeProjectId: activeProject?.id ?? null,
+      activeTreeId: null,
+    };
+  }
+
+  const maybeState = value as {
+    projects?: unknown;
+    activeProjectId?: unknown;
+    activeTreeId?: unknown;
+  };
+  const projects = Array.isArray(maybeState.projects)
+    ? maybeState.projects.flatMap((project): WorkspaceProject[] => {
+        if (typeof project !== "object" || project === null) return [];
+        const candidate = project as Partial<WorkspaceProject>;
+        if (
+          typeof candidate.rootPath !== "string" ||
+          candidate.rootPath.length === 0
+        )
+          return [];
+        const rootPath = candidate.rootPath;
+        const name =
+          typeof candidate.name === "string" && candidate.name.length > 0
+            ? candidate.name
+            : (rootPath.split(/[\\/]/).filter(Boolean).at(-1) ?? rootPath);
+        const id =
+          typeof candidate.id === "string" && candidate.id.length > 0
+            ? candidate.id
+            : projectId(rootPath);
+        const trees = Array.isArray(candidate.trees)
+          ? candidate.trees.flatMap((tree): WorkspaceTree[] => {
+              if (typeof tree !== "object" || tree === null) return [];
+              const treeCandidate = tree as Partial<WorkspaceTree>;
+              if (
+                typeof treeCandidate.name !== "string" ||
+                typeof treeCandidate.worktreePath !== "string" ||
+                typeof treeCandidate.branchName !== "string"
+              )
+                return [];
+              return [
+                {
+                  id:
+                    typeof treeCandidate.id === "string"
+                      ? treeCandidate.id
+                      : treeId(rootPath, treeCandidate.name),
+                  name: treeCandidate.name,
+                  worktreePath: treeCandidate.worktreePath,
+                  branchName: treeCandidate.branchName,
+                },
+              ];
+            })
+          : [];
+        return [
+          {
+            id,
+            name,
+            rootPath,
+            slug:
+              typeof candidate.slug === "string"
+                ? candidate.slug
+                : slugify(name),
+            trees,
+          },
+        ];
+      })
     : [];
-  const activeProjectPath =
-    typeof maybeState.activeProjectPath === "string" &&
-    openProjectPaths.includes(maybeState.activeProjectPath)
-      ? maybeState.activeProjectPath
-      : (openProjectPaths[0] ?? null);
+  const activeProject =
+    projects.find((project) => project.id === maybeState.activeProjectId) ??
+    projects[0];
+  const activeTree =
+    activeProject?.trees.find((tree) => tree.id === maybeState.activeTreeId) ??
+    activeProject?.trees[0];
 
   return {
     version: 1,
-    openProjectPaths,
-    activeProjectPath,
+    projects,
+    activeProjectId: activeProject?.id ?? null,
+    activeTreeId: activeTree?.id ?? null,
   };
 }
 
@@ -318,6 +470,167 @@ async function saveWorkspaceState(state: unknown): Promise<void> {
     `${JSON.stringify(normalizedState, null, 2)}\n`,
     "utf8",
   );
+}
+
+async function git(args: string[], cwd: string): Promise<string> {
+  const { stdout } = await execFileAsync("git", args, {
+    cwd,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  return stdout.trim();
+}
+
+async function getGitTopLevel(selectedPath: string): Promise<string> {
+  try {
+    return await git(["rev-parse", "--show-toplevel"], selectedPath);
+  } catch {
+    throw new Error(
+      "Canopy projects must be Git repositories. Choose a folder inside a Git repository.",
+    );
+  }
+}
+
+async function resolveWorktreeBase(rootPath: string): Promise<string> {
+  try {
+    await git(["fetch", "origin", "--prune"], rootPath);
+    try {
+      await git(["remote", "set-head", "origin", "--auto"], rootPath);
+    } catch {}
+    return await git(["rev-parse", "--verify", "origin/HEAD"], rootPath);
+  } catch {
+    return "HEAD";
+  }
+}
+
+async function listBranches(rootPath: string): Promise<Set<string>> {
+  try {
+    const output = await git(
+      [
+        "for-each-ref",
+        "--format=%(refname:short)",
+        "refs/heads",
+        "refs/remotes",
+      ],
+      rootPath,
+    );
+    return new Set(
+      output
+        .split("\n")
+        .map((branch) => branch.replace(/^origin\//, ""))
+        .filter(Boolean),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+async function allocateTreeName(project: WorkspaceProject): Promise<string> {
+  const existingNames = new Set(project.trees.map((tree) => tree.name));
+  const existingPaths = new Set(project.trees.map((tree) => tree.worktreePath));
+  const branches = await listBranches(project.rootPath);
+  const projectWorkspacePath = join(
+    os.homedir(),
+    "canopy",
+    "workspaces",
+    project.slug,
+  );
+  const candidates = [...TREE_NAMES].sort(() => Math.random() - 0.5);
+
+  for (const candidate of candidates) {
+    if (
+      !existingNames.has(candidate) &&
+      !existingPaths.has(join(projectWorkspacePath, candidate)) &&
+      !branches.has(candidate)
+    )
+      return candidate;
+  }
+
+  for (const candidate of candidates) {
+    for (let suffix = 2; suffix < 1000; suffix += 1) {
+      const name = `${candidate}-${suffix}`;
+      if (
+        !existingNames.has(name) &&
+        !existingPaths.has(join(projectWorkspacePath, name)) &&
+        !branches.has(name)
+      )
+        return name;
+    }
+  }
+
+  throw new Error("Unable to allocate a unique tree name.");
+}
+
+function allocateProjectSlug(
+  rootPath: string,
+  existingProjects: WorkspaceProject[],
+): string {
+  const base = slugify(
+    rootPath.split(/[\\/]/).filter(Boolean).at(-1) ?? rootPath,
+  );
+  const collision = existingProjects.some(
+    (project) => project.slug === base && project.rootPath !== rootPath,
+  );
+  return collision ? `${base}-${hashId(rootPath).slice(0, 6)}` : base;
+}
+
+async function createInitialTree(
+  project: WorkspaceProject,
+): Promise<WorkspaceTree> {
+  const name = await allocateTreeName(project);
+  const worktreePath = join(
+    os.homedir(),
+    "canopy",
+    "workspaces",
+    project.slug,
+    name,
+  );
+  await mkdir(dirname(worktreePath), { recursive: true });
+  const base = await resolveWorktreeBase(project.rootPath);
+  await git(
+    ["worktree", "add", "-b", name, worktreePath, base],
+    project.rootPath,
+  );
+  return {
+    id: treeId(project.rootPath, name),
+    name,
+    worktreePath,
+    branchName: name,
+  };
+}
+
+async function openProjectFromPath(
+  selectedPath: string,
+): Promise<WorkspaceState> {
+  const rootPath = await getGitTopLevel(selectedPath);
+  const state = await loadWorkspaceState();
+  const existingProject = state.projects.find(
+    (project) => project.rootPath === rootPath,
+  );
+  if (existingProject) {
+    const tree =
+      existingProject.trees[0] ?? (await createInitialTree(existingProject));
+    if (existingProject.trees.length === 0) existingProject.trees.push(tree);
+
+    state.activeProjectId = existingProject.id;
+    state.activeTreeId = tree.id;
+    await saveWorkspaceState(state);
+    return state;
+  }
+
+  const project: WorkspaceProject = {
+    id: projectId(rootPath),
+    name: rootPath.split(/[\\/]/).filter(Boolean).at(-1) ?? rootPath,
+    rootPath,
+    slug: allocateProjectSlug(rootPath, state.projects),
+    trees: [],
+  };
+  const tree = await createInitialTree(project);
+  project.trees.push(tree);
+  state.projects.push(project);
+  state.activeProjectId = project.id;
+  state.activeTreeId = tree.id;
+  await saveWorkspaceState(state);
+  return state;
 }
 
 function validateSender(frame: WebFrameMain | null): boolean {
@@ -374,7 +687,8 @@ function registerProjectIpc(): void {
 
     if (result.canceled) return null;
 
-    return result.filePaths[0] ?? null;
+    const selectedPath = result.filePaths[0];
+    return selectedPath ? openProjectFromPath(selectedPath) : null;
   });
 }
 

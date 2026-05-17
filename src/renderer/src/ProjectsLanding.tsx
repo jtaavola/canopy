@@ -50,7 +50,7 @@ function ProjectsLanding({
           </span>
         </Button>
         {error ? (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="mt-4">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
