@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
-import { readdir, readFile, realpath, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
@@ -58,6 +58,18 @@ type ChangedFile = {
   status: "added" | "modified" | "deleted" | "renamed" | "untracked";
   staged: boolean;
   unstaged: boolean;
+};
+
+type WorkspaceState = {
+  version: 1;
+  openProjectPaths: string[];
+  activeProjectPath: string | null;
+};
+
+const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
+  version: 1,
+  openProjectPaths: [],
+  activeProjectPath: null,
 };
 
 type ChangedFilesResult =
@@ -248,6 +260,66 @@ function normalizeTerminalDimension(value: unknown, fallback: number): number {
   return Math.max(1, Math.floor(value));
 }
 
+function getWorkspaceStatePath(): string {
+  return join(app.getPath("userData"), "workspace-state.json");
+}
+
+function normalizeWorkspaceState(value: unknown): WorkspaceState {
+  if (typeof value !== "object" || value === null) {
+    return DEFAULT_WORKSPACE_STATE;
+  }
+
+  const maybeState = value as {
+    openProjectPaths?: unknown;
+    activeProjectPath?: unknown;
+  };
+  const openProjectPaths = Array.isArray(maybeState.openProjectPaths)
+    ? [...new Set(maybeState.openProjectPaths.filter((path) => typeof path === "string" && path.length > 0))]
+    : [];
+  const activeProjectPath =
+    typeof maybeState.activeProjectPath === "string" &&
+    openProjectPaths.includes(maybeState.activeProjectPath)
+      ? maybeState.activeProjectPath
+      : (openProjectPaths[0] ?? null);
+
+  return {
+    version: 1,
+    openProjectPaths,
+    activeProjectPath,
+  };
+}
+
+async function loadWorkspaceState(): Promise<WorkspaceState> {
+  try {
+    const content = await readFile(getWorkspaceStatePath(), "utf8");
+    return normalizeWorkspaceState(JSON.parse(content));
+  } catch (error) {
+    if (
+      error instanceof SyntaxError ||
+      (typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as NodeJS.ErrnoException).code === "ENOENT")
+    ) {
+      return DEFAULT_WORKSPACE_STATE;
+    }
+
+    throw error;
+  }
+}
+
+async function saveWorkspaceState(state: unknown): Promise<void> {
+  const normalizedState = normalizeWorkspaceState(state);
+  const workspaceStatePath = getWorkspaceStatePath();
+
+  await mkdir(dirname(workspaceStatePath), { recursive: true });
+  await writeFile(
+    workspaceStatePath,
+    `${JSON.stringify(normalizedState, null, 2)}\n`,
+    "utf8",
+  );
+}
+
 function validateSender(frame: WebFrameMain | null): boolean {
   if (!frame) return false;
 
@@ -276,6 +348,18 @@ function validateSender(frame: WebFrameMain | null): boolean {
 }
 
 function registerProjectIpc(): void {
+  ipcMain.handle("workspace:load", async (event): Promise<WorkspaceState> => {
+    if (!validateSender(event.senderFrame)) return DEFAULT_WORKSPACE_STATE;
+
+    return loadWorkspaceState();
+  });
+
+  ipcMain.handle("workspace:save", async (event, state?: unknown) => {
+    if (!validateSender(event.senderFrame)) return;
+
+    await saveWorkspaceState(state);
+  });
+
   ipcMain.handle("project:open", async (event) => {
     if (!validateSender(event.senderFrame)) return null;
 
