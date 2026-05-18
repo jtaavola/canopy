@@ -5,6 +5,7 @@ import {
   readdir,
   readFile,
   realpath,
+  rmdir,
   stat,
   writeFile,
 } from "node:fs/promises";
@@ -616,6 +617,58 @@ async function createTreeForProject(
   return state;
 }
 
+async function deleteTreeFromProject(
+  projectIdToUpdate: string,
+  treeIdToDelete: string,
+): Promise<WorkspaceState> {
+  const state = await loadWorkspaceState();
+  const project = state.projects.find(
+    (candidate) => candidate.id === projectIdToUpdate,
+  );
+
+  if (!project) throw new Error("Project is no longer open.");
+
+  const treeIndex = project.trees.findIndex(
+    (candidate) => candidate.id === treeIdToDelete,
+  );
+  if (treeIndex < 0) throw new Error("Tree is no longer open.");
+
+  const [tree] = project.trees.splice(treeIndex, 1);
+
+  await git(
+    ["worktree", "remove", "--force", tree.worktreePath],
+    project.rootPath,
+  );
+  await git(["branch", "-D", tree.branchName], project.rootPath);
+
+  cleanupTerminal(tree.worktreePath);
+
+  if (state.activeProjectId === project.id && state.activeTreeId === tree.id) {
+    state.activeProjectId = project.id;
+    state.activeTreeId = project.trees[0]?.id ?? null;
+  }
+
+  if (state.activeTreeId === tree.id) state.activeTreeId = null;
+
+  try {
+    await rmdir(join(os.homedir(), "canopy", "workspaces", project.slug));
+  } catch (error) {
+    if (
+      typeof error !== "object" ||
+      error === null ||
+      !("code" in error) ||
+      !["ENOENT", "ENOTEMPTY", "EEXIST"].includes(
+        String((error as NodeJS.ErrnoException).code),
+      )
+    ) {
+      throw error;
+    }
+  }
+
+  await saveWorkspaceState(state);
+  return state;
+}
+
 async function openProjectFromPath(
   selectedPath: string,
 ): Promise<WorkspaceState> {
@@ -721,6 +774,23 @@ function registerProjectIpc(): void {
       }
 
       return createTreeForProject(projectIdToUpdate);
+    },
+  );
+
+  ipcMain.handle(
+    "project:delete-tree",
+    async (event, projectIdToUpdate?: unknown, treeIdToDelete?: unknown) => {
+      if (!validateSender(event.senderFrame)) return DEFAULT_WORKSPACE_STATE;
+      if (
+        typeof projectIdToUpdate !== "string" ||
+        projectIdToUpdate.length === 0 ||
+        typeof treeIdToDelete !== "string" ||
+        treeIdToDelete.length === 0
+      ) {
+        throw new Error("Choose a tree before deleting it.");
+      }
+
+      return deleteTreeFromProject(projectIdToUpdate, treeIdToDelete);
     },
   );
 }

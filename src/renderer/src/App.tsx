@@ -43,6 +43,7 @@ function ProjectManager({
   onOpenProject,
   onCreateTree,
   onSelectTree,
+  onDeleteTree,
   onRemoveProject,
 }: {
   projects: readonly WorkspaceProject[];
@@ -53,6 +54,7 @@ function ProjectManager({
   onOpenProject: () => void;
   onCreateTree: (projectId: string) => void;
   onSelectTree: (projectId: string, treeId: string) => void;
+  onDeleteTree: (projectId: string, treeId: string) => void;
   onRemoveProject: (projectId: string) => void;
 }): React.JSX.Element {
   return (
@@ -128,14 +130,14 @@ function ProjectManager({
                       isActiveProject && tree.id === activeTreeId;
 
                     return (
-                      <li key={tree.id} className="mb-1">
+                      <li key={tree.id} className="group/tree relative mb-1">
                         <Button
                           type="button"
                           variant="ghost"
                           className={cn(
-                            "h-auto w-full min-w-0 justify-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:text-white",
+                            "h-auto w-full min-w-0 justify-start gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm hover:text-white",
                             isActiveTree
-                              ? "bg-neutral-700 text-white"
+                              ? "bg-neutral-700 text-white hover:bg-neutral-600 dark:hover:bg-neutral-600"
                               : "text-neutral-300 hover:bg-neutral-800",
                           )}
                           aria-current={isActiveTree ? "page" : undefined}
@@ -150,18 +152,32 @@ function ProjectManager({
                             {tree.name}
                           </span>
                         </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="absolute top-1 right-1 opacity-0 text-red-400 transition-opacity hover:bg-red-950 hover:text-red-200 group-hover/tree:opacity-100 focus-visible:opacity-100"
+                          aria-label={`Delete tree ${tree.name}`}
+                          title="Delete tree"
+                          onClick={() => onDeleteTree(project.id, tree.id)}
+                        >
+                          <IconTrash
+                            aria-hidden="true"
+                            data-icon="inline-start"
+                          />
+                        </Button>
                       </li>
                     );
                   })}
                 </ul>
               ) : isActiveProject ? (
-                <div className="mt-1 ml-5 rounded-md border border-dashed border-neutral-800 p-2 text-neutral-500 text-xs">
-                  <div>No trees yet.</div>
+                <div className="mt-1 ml-5 flex items-center gap-2 rounded-md border border-dashed border-neutral-800 p-2 text-neutral-500 text-xs">
+                  <span>No trees yet.</span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="mt-1 h-7 px-2 text-neutral-200"
+                    className="ml-auto h-7 px-2 text-neutral-200"
                     disabled={isCreatingTree}
                     onClick={() => onCreateTree(project.id)}
                   >
@@ -510,6 +526,40 @@ function App(): React.JSX.Element {
     }
   };
 
+  const deleteTree = async (
+    projectIdToUpdate: string,
+    treeIdToDelete: string,
+  ): Promise<void> => {
+    const project = projects.find(
+      (candidate) => candidate.id === projectIdToUpdate,
+    );
+    const tree = project?.trees.find(
+      (candidate) => candidate.id === treeIdToDelete,
+    );
+    if (!project || !tree) return;
+
+    const confirmed = window.confirm(
+      `Delete tree "${tree.name}"?\n\nThis will permanently remove uncommitted work, force-remove the worktree directory:\n${tree.worktreePath}\n\nand delete branch "${tree.branchName}".`,
+    );
+    if (!confirmed) return;
+
+    try {
+      const workspaceState = await window.api.project.deleteTree(
+        projectIdToUpdate,
+        treeIdToDelete,
+      );
+      setProjects(workspaceState.projects);
+      setActiveProjectId(workspaceState.activeProjectId);
+      setActiveTreeId(workspaceState.activeTreeId);
+      setSelectedFilePath(null);
+      setSelectedChangedFilePath(null);
+    } catch (unknownError: unknown) {
+      setOpenProjectError(
+        getUserFacingErrorMessage(unknownError, "Unable to delete tree"),
+      );
+    }
+  };
+
   const removeProject = (projectIdToRemove: string): void => {
     const project = projects.find(
       (candidate) => candidate.id === projectIdToRemove,
@@ -645,6 +695,7 @@ function App(): React.JSX.Element {
                     onOpenProject={openProject}
                     onCreateTree={createTree}
                     onSelectTree={selectTree}
+                    onDeleteTree={deleteTree}
                     onRemoveProject={removeProject}
                   />
                 </ResizablePanel>
