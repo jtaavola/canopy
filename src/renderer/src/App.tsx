@@ -171,13 +171,13 @@ function ProjectManager({
                   })}
                 </ul>
               ) : isActiveProject ? (
-                <div className="mt-1 ml-5 rounded-md border border-dashed border-neutral-800 p-2 text-neutral-500 text-xs">
-                  <div>No trees yet.</div>
+                <div className="mt-1 ml-5 flex items-center gap-2 rounded-md border border-dashed border-neutral-800 p-2 text-neutral-500 text-xs">
+                  <span>No trees yet.</span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="mt-1 h-7 px-2 text-neutral-200"
+                    className="ml-auto h-7 px-2 text-neutral-200"
                     disabled={isCreatingTree}
                     onClick={() => onCreateTree(project.id)}
                   >
