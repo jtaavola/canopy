@@ -481,19 +481,24 @@ async function resolveWorktreeBase(rootPath: string): Promise<string> {
 async function listBranches(rootPath: string): Promise<Set<string>> {
   try {
     const output = await git(
-      [
-        "for-each-ref",
-        "--format=%(refname:short)",
-        "refs/heads",
-        "refs/remotes",
-      ],
+      ["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"],
       rootPath,
     );
     const branches = new Set<string>();
-    for (const branch of output.split("\n").filter(Boolean)) {
-      branches.add(branch);
-      if (branch.includes("/"))
-        branches.add(branch.split("/").slice(1).join("/"));
+    for (const ref of output.split("\n").filter(Boolean)) {
+      if (ref.startsWith("refs/heads/")) {
+        branches.add(ref.slice("refs/heads/".length));
+        continue;
+      }
+
+      if (ref.startsWith("refs/remotes/")) {
+        const remoteBranch = ref.slice("refs/remotes/".length);
+        const separatorIndex = remoteBranch.indexOf("/");
+        if (separatorIndex === -1) continue;
+
+        const branch = remoteBranch.slice(separatorIndex + 1);
+        if (branch !== "HEAD") branches.add(branch);
+      }
     }
     return branches;
   } catch {
