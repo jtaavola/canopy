@@ -137,7 +137,7 @@ function ProjectManager({
                           className={cn(
                             "h-auto w-full min-w-0 justify-start gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm hover:text-white",
                             isActiveTree
-                              ? "bg-neutral-700 text-white"
+                              ? "bg-neutral-700 text-white hover:bg-neutral-600 dark:hover:bg-neutral-600"
                               : "text-neutral-300 hover:bg-neutral-800",
                           )}
                           aria-current={isActiveTree ? "page" : undefined}
