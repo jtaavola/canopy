@@ -24,6 +24,7 @@ import {
 } from "electron";
 import * as pty from "node-pty";
 import icon from "../../resources/icon.png?asset";
+import { TREE_NAMES } from "./tree-names";
 
 const execFileAsync = promisify(execFile);
 
@@ -97,27 +98,6 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   activeProjectId: null,
   activeTreeId: null,
 };
-
-const TREE_NAMES = [
-  "alder",
-  "aspen",
-  "birch",
-  "cedar",
-  "cypress",
-  "dogwood",
-  "elm",
-  "fir",
-  "hemlock",
-  "juniper",
-  "larch",
-  "maple",
-  "oak",
-  "poplar",
-  "redwood",
-  "spruce",
-  "sycamore",
-  "willow",
-];
 
 type ChangedFilesResult =
   | { status: "ok"; files: ChangedFile[] }
@@ -386,10 +366,7 @@ function normalizeWorkspaceState(value: unknown): WorkspaceState {
           typeof candidate.name === "string" && candidate.name.length > 0
             ? candidate.name
             : (rootPath.split(/[\\/]/).filter(Boolean).at(-1) ?? rootPath);
-        const id =
-          typeof candidate.id === "string" && candidate.id.length > 0
-            ? candidate.id
-            : projectId(rootPath);
+        const id = projectId(rootPath);
         const trees = Array.isArray(candidate.trees)
           ? candidate.trees.flatMap((tree): WorkspaceTree[] => {
               if (typeof tree !== "object" || tree === null) return [];
@@ -402,10 +379,7 @@ function normalizeWorkspaceState(value: unknown): WorkspaceState {
                 return [];
               return [
                 {
-                  id:
-                    typeof treeCandidate.id === "string"
-                      ? treeCandidate.id
-                      : treeId(rootPath, treeCandidate.name),
+                  id: treeId(rootPath, treeCandidate.name),
                   name: treeCandidate.name,
                   worktreePath: treeCandidate.worktreePath,
                   branchName: treeCandidate.branchName,
@@ -483,7 +457,8 @@ async function git(args: string[], cwd: string): Promise<string> {
 
 async function getGitTopLevel(selectedPath: string): Promise<string> {
   try {
-    return await git(["rev-parse", "--show-toplevel"], selectedPath);
+    const topLevel = await git(["rev-parse", "--show-toplevel"], selectedPath);
+    return await realpath(topLevel);
   } catch {
     throw new Error(
       "Canopy projects must be Git repositories. Choose a folder inside a Git repository.",
@@ -514,14 +489,32 @@ async function listBranches(rootPath: string): Promise<Set<string>> {
       ],
       rootPath,
     );
-    return new Set(
-      output
-        .split("\n")
-        .map((branch) => branch.replace(/^origin\//, ""))
-        .filter(Boolean),
-    );
+    const branches = new Set<string>();
+    for (const branch of output.split("\n").filter(Boolean)) {
+      branches.add(branch);
+      if (branch.includes("/"))
+        branches.add(branch.split("/").slice(1).join("/"));
+    }
+    return branches;
   } catch {
     return new Set();
+  }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -536,25 +529,24 @@ async function allocateTreeName(project: WorkspaceProject): Promise<string> {
     project.slug,
   );
   const candidates = [...TREE_NAMES].sort(() => Math.random() - 0.5);
+  const isAvailable = async (name: string): Promise<boolean> => {
+    const worktreePath = join(projectWorkspacePath, name);
+    return (
+      !existingNames.has(name) &&
+      !existingPaths.has(worktreePath) &&
+      !(await pathExists(worktreePath)) &&
+      !branches.has(name)
+    );
+  };
 
   for (const candidate of candidates) {
-    if (
-      !existingNames.has(candidate) &&
-      !existingPaths.has(join(projectWorkspacePath, candidate)) &&
-      !branches.has(candidate)
-    )
-      return candidate;
+    if (await isAvailable(candidate)) return candidate;
   }
 
   for (const candidate of candidates) {
     for (let suffix = 2; suffix < 1000; suffix += 1) {
       const name = `${candidate}-${suffix}`;
-      if (
-        !existingNames.has(name) &&
-        !existingPaths.has(join(projectWorkspacePath, name)) &&
-        !branches.has(name)
-      )
-        return name;
+      if (await isAvailable(name)) return name;
     }
   }
 
