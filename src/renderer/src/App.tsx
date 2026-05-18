@@ -560,27 +560,21 @@ function App(): React.JSX.Element {
     }
   };
 
-  const removeProject = (projectIdToRemove: string): void => {
-    const project = projects.find(
-      (candidate) => candidate.id === projectIdToRemove,
-    );
-    for (const tree of project?.trees ?? [])
-      window.api.terminal.dispose(tree.worktreePath);
+  const removeProject = async (projectIdToRemove: string): Promise<void> => {
+    setOpenProjectError(null);
 
-    setProjects((currentProjects) => {
-      const nextProjects = currentProjects.filter(
-        (project) => project.id !== projectIdToRemove,
+    try {
+      const workspaceState = await window.api.project.remove(projectIdToRemove);
+      setProjects(workspaceState.projects);
+      setActiveProjectId(workspaceState.activeProjectId);
+      setActiveTreeId(workspaceState.activeTreeId);
+      setSelectedFilePath(null);
+      setSelectedChangedFilePath(null);
+    } catch (unknownError: unknown) {
+      setOpenProjectError(
+        getUserFacingErrorMessage(unknownError, "Unable to remove project"),
       );
-
-      if (activeProjectId === projectIdToRemove) {
-        setSelectedFilePath(null);
-        setSelectedChangedFilePath(null);
-        setActiveProjectId(nextProjects[0]?.id ?? null);
-        setActiveTreeId(nextProjects[0]?.trees[0]?.id ?? null);
-      }
-
-      return nextProjects;
-    });
+    }
   };
 
   const noDragStyle = {
