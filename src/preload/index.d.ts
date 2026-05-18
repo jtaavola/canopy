@@ -30,6 +30,7 @@ export interface WorkspaceApi {
 export interface ProjectApi {
   open: () => Promise<WorkspaceState | null>;
   createTree: (projectId: string) => Promise<WorkspaceState>;
+  deleteTree: (projectId: string, treeId: string) => Promise<WorkspaceState>;
 }
 
 export type FilePreviewResult =
