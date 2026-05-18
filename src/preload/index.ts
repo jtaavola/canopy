@@ -24,6 +24,10 @@ const api = {
       ipcRenderer.invoke("project:delete-tree", projectId, treeId) as Promise<
         import("./index.d").WorkspaceState
       >,
+    remove: (projectId: string) =>
+      ipcRenderer.invoke("project:remove", projectId) as Promise<
+        import("./index.d").WorkspaceState
+      >,
   },
   fileTree: {
     list: (rootPath: string) =>

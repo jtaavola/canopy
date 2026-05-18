@@ -669,6 +669,51 @@ async function deleteTreeFromProject(
   return state;
 }
 
+async function removeProjectFromWorkspace(
+  projectIdToRemove: string,
+): Promise<WorkspaceState> {
+  const state = await loadWorkspaceState();
+  const projectIndex = state.projects.findIndex(
+    (candidate) => candidate.id === projectIdToRemove,
+  );
+
+  if (projectIndex < 0) throw new Error("Project is no longer open.");
+
+  const project = state.projects[projectIndex];
+  if (project.trees.length > 0) {
+    throw new Error(
+      `Remove all trees from ${project.name} before removing the project from Canopy.`,
+    );
+  }
+
+  state.projects.splice(projectIndex, 1);
+
+  if (state.activeProjectId === project.id) {
+    const nextProject =
+      state.projects[projectIndex] ?? state.projects[projectIndex - 1] ?? null;
+    state.activeProjectId = nextProject?.id ?? null;
+    state.activeTreeId = nextProject?.trees[0]?.id ?? null;
+  } else if (
+    !state.projects.some((candidate) => candidate.id === state.activeProjectId)
+  ) {
+    const nextProject = state.projects[0] ?? null;
+    state.activeProjectId = nextProject?.id ?? null;
+    state.activeTreeId = nextProject?.trees[0]?.id ?? null;
+  }
+
+  if (
+    state.activeTreeId &&
+    !state.projects.some((candidate) =>
+      candidate.trees.some((tree) => tree.id === state.activeTreeId),
+    )
+  ) {
+    state.activeTreeId = null;
+  }
+
+  await saveWorkspaceState(state);
+  return state;
+}
+
 async function openProjectFromPath(
   selectedPath: string,
 ): Promise<WorkspaceState> {
@@ -791,6 +836,21 @@ function registerProjectIpc(): void {
       }
 
       return deleteTreeFromProject(projectIdToUpdate, treeIdToDelete);
+    },
+  );
+
+  ipcMain.handle(
+    "project:remove",
+    async (event, projectIdToRemove?: unknown) => {
+      if (!validateSender(event.senderFrame)) return DEFAULT_WORKSPACE_STATE;
+      if (
+        typeof projectIdToRemove !== "string" ||
+        projectIdToRemove.length === 0
+      ) {
+        throw new Error("Choose a project before removing it.");
+      }
+
+      return removeProjectFromWorkspace(projectIdToRemove);
     },
   );
 }
