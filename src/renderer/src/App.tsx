@@ -81,6 +81,7 @@ function ProjectManager({
       <ul className="m-0 min-h-0 flex-1 overflow-auto p-2">
         {projects.map((project) => {
           const isActiveProject = project.id === activeProjectId;
+          const isBrokenProject = project.status?.isBroken === true;
 
           return (
             <li key={project.id} className="mb-2">
@@ -92,11 +93,20 @@ function ProjectManager({
                   )}
                   title={project.rootPath}
                 >
-                  <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-sm">
-                    {project.name}
+                  <span className="flex max-w-full items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-sm">
+                    <span className="min-w-0 overflow-hidden text-ellipsis">
+                      {project.name}
+                    </span>
+                    {isBrokenProject ? (
+                      <span className="shrink-0 rounded bg-red-950 px-1.5 py-0.5 text-red-200 text-[10px] uppercase tracking-wide">
+                        Broken
+                      </span>
+                    ) : null}
                   </span>
                   <span className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-neutral-500 text-xs">
-                    {project.rootPath}
+                    {isBrokenProject
+                      ? (project.status?.reason ?? "Project is unavailable.")
+                      : project.rootPath}
                   </span>
                 </div>
                 <Button
@@ -106,7 +116,7 @@ function ProjectManager({
                   className="absolute top-2 right-8 opacity-0 text-neutral-400 transition-opacity hover:bg-neutral-700 hover:text-white group-hover:opacity-100 focus-visible:opacity-100"
                   aria-label={`Create a new tree for ${project.name}`}
                   title="New tree"
-                  disabled={isCreatingTree}
+                  disabled={isCreatingTree || isBrokenProject}
                   onClick={() => onCreateTree(project.id)}
                 >
                   <IconPlus aria-hidden="true" data-icon="inline-start" />
@@ -128,6 +138,7 @@ function ProjectManager({
                   {project.trees.map((tree) => {
                     const isActiveTree =
                       isActiveProject && tree.id === activeTreeId;
+                    const isBrokenTree = tree.status?.isBroken === true;
 
                     return (
                       <li key={tree.id} className="group/tree relative mb-1">
@@ -139,9 +150,14 @@ function ProjectManager({
                             isActiveTree
                               ? "bg-neutral-700 text-white hover:bg-neutral-600 dark:hover:bg-neutral-600"
                               : "text-neutral-300 hover:bg-neutral-800",
+                            isBrokenTree && "text-red-200 hover:text-red-100",
                           )}
                           aria-current={isActiveTree ? "page" : undefined}
-                          title={tree.worktreePath}
+                          title={
+                            isBrokenTree
+                              ? (tree.status?.reason ?? "Tree is unavailable.")
+                              : tree.worktreePath
+                          }
                           onClick={() => onSelectTree(project.id, tree.id)}
                         >
                           <IconSeedling
@@ -151,6 +167,11 @@ function ProjectManager({
                           <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
                             {tree.name}
                           </span>
+                          {isBrokenTree ? (
+                            <span className="ml-auto shrink-0 rounded bg-red-950 px-1.5 py-0.5 text-red-200 text-[10px] uppercase tracking-wide">
+                              Broken
+                            </span>
+                          ) : null}
                         </Button>
                         <Button
                           type="button"
@@ -359,8 +380,11 @@ function App(): React.JSX.Element {
       null,
     [activeProject, activeTreeId],
   );
+  const isActiveProjectBroken = activeProject?.status?.isBroken === true;
   const resolvedActiveTreeId = activeTree?.id ?? null;
-  const activeWorktreePath = activeTree?.worktreePath ?? null;
+  const isActiveTreeBroken = activeTree?.status?.isBroken === true;
+  const activeWorktreePath =
+    activeTree && !isActiveTreeBroken ? activeTree.worktreePath : null;
 
   useEffect(() => {
     let isMounted = true;
@@ -539,7 +563,9 @@ function App(): React.JSX.Element {
     if (!project || !tree) return;
 
     const confirmed = window.confirm(
-      `Delete tree "${tree.name}"?\n\nThis will permanently remove uncommitted work, force-remove the worktree directory:\n${tree.worktreePath}\n\nand delete branch "${tree.branchName}".`,
+      tree.status?.isBroken
+        ? `Remove broken tree "${tree.name}" from Canopy?\n\nCanopy will attempt best-effort Git/worktree cleanup, then forget this tree.`
+        : `Delete tree "${tree.name}"?\n\nThis will permanently remove uncommitted work, force-remove the worktree directory:\n${tree.worktreePath}\n\nand delete branch "${tree.branchName}".`,
     );
     if (!confirmed) return;
 
@@ -730,6 +756,37 @@ function App(): React.JSX.Element {
                     />
                   ) : null}
                 </>
+              ) : isActiveTreeBroken || isActiveProjectBroken ? (
+                <section className="flex size-full flex-col items-center justify-center gap-3 bg-background p-8 text-center text-neutral-200">
+                  <IconSeedling
+                    className="size-10 text-red-500"
+                    aria-hidden="true"
+                  />
+                  <div>
+                    <h2 className="font-semibold text-lg">
+                      {activeTree?.name ?? activeProject.name} is broken
+                    </h2>
+                    <p className="mt-1 text-neutral-500 text-sm">
+                      {activeTree?.status?.reason ??
+                        activeProject.status?.reason ??
+                        "This item is unavailable."}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      if (activeTree)
+                        deleteTree(activeProject.id, activeTree.id);
+                      else removeProject(activeProject.id);
+                    }}
+                  >
+                    <IconTrash aria-hidden="true" data-icon="inline-start" />
+                    {activeTree
+                      ? "Remove broken tree"
+                      : "Remove broken project"}
+                  </Button>
+                </section>
               ) : (
                 <EmptyProjectState
                   projectName={activeProject.name}

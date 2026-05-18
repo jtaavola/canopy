@@ -69,11 +69,17 @@ type ChangedFile = {
   unstaged: boolean;
 };
 
+type BrokenStatus = {
+  isBroken: boolean;
+  reason?: string;
+};
+
 type WorkspaceTree = {
   id: string;
   name: string;
   worktreePath: string;
   branchName: string;
+  status?: BrokenStatus;
 };
 
 type WorkspaceProject = {
@@ -82,6 +88,7 @@ type WorkspaceProject = {
   rootPath: string;
   slug: string;
   trees: WorkspaceTree[];
+  status?: BrokenStatus;
 };
 
 type WorkspaceState = {
@@ -442,10 +449,92 @@ function normalizeWorkspaceState(value: unknown): WorkspaceState {
   };
 }
 
+async function projectBrokenReason(rootPath: string): Promise<string | null> {
+  try {
+    const rootStat = await stat(rootPath);
+    if (!rootStat.isDirectory()) return "Project path is not a directory.";
+    await git(["rev-parse", "--show-toplevel"], rootPath);
+    return null;
+  } catch {
+    return "Project path is missing or is no longer a Git repository.";
+  }
+}
+
+async function listRegisteredWorktrees(rootPath: string): Promise<Set<string>> {
+  const output = await git(["worktree", "list", "--porcelain"], rootPath);
+  const paths = output
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => resolve(line.slice("worktree ".length)));
+
+  return new Set(paths);
+}
+
+async function treeBrokenReason(
+  tree: WorkspaceTree,
+  registeredWorktrees: Set<string> | null,
+): Promise<string | null> {
+  if (!registeredWorktrees) return "Project Git worktrees are unavailable.";
+
+  try {
+    const treeStat = await stat(tree.worktreePath);
+    if (!treeStat.isDirectory()) return "Tree path is not a directory.";
+    const realWorktreePath = resolve(await realpath(tree.worktreePath));
+    if (
+      !registeredWorktrees.has(realWorktreePath) &&
+      !registeredWorktrees.has(resolve(tree.worktreePath))
+    ) {
+      return "Tree is no longer registered as a Git worktree.";
+    }
+    return null;
+  } catch {
+    return "Tree directory is missing.";
+  }
+}
+
+async function hydrateWorkspaceStatus(
+  state: WorkspaceState,
+): Promise<WorkspaceState> {
+  const projects = await Promise.all(
+    state.projects.map(async (project): Promise<WorkspaceProject> => {
+      const projectReason = await projectBrokenReason(project.rootPath);
+      let registeredWorktrees: Set<string> | null = null;
+
+      if (!projectReason) {
+        try {
+          registeredWorktrees = await listRegisteredWorktrees(project.rootPath);
+        } catch {
+          registeredWorktrees = null;
+        }
+      }
+
+      const trees = await Promise.all(
+        project.trees.map(async (tree): Promise<WorkspaceTree> => {
+          const reason = await treeBrokenReason(tree, registeredWorktrees);
+          return {
+            ...tree,
+            status: reason ? { isBroken: true, reason } : { isBroken: false },
+          };
+        }),
+      );
+
+      return {
+        ...project,
+        trees,
+        status: projectReason
+          ? { isBroken: true, reason: projectReason }
+          : { isBroken: false },
+      };
+    }),
+  );
+
+  return { ...state, projects };
+}
+
 async function loadWorkspaceState(): Promise<WorkspaceState> {
   try {
     const content = await readFile(getWorkspaceStatePath(), "utf8");
-    return normalizeWorkspaceState(JSON.parse(content));
+    return hydrateWorkspaceStatus(normalizeWorkspaceState(JSON.parse(content)));
   } catch (error) {
     if (
       error instanceof SyntaxError ||
@@ -635,11 +724,15 @@ async function deleteTreeFromProject(
 
   const [tree] = project.trees.splice(treeIndex, 1);
 
-  await git(
-    ["worktree", "remove", "--force", tree.worktreePath],
-    project.rootPath,
-  );
-  await git(["branch", "-D", tree.branchName], project.rootPath);
+  try {
+    await git(
+      ["worktree", "remove", "--force", tree.worktreePath],
+      project.rootPath,
+    );
+  } catch {}
+  try {
+    await git(["branch", "-D", tree.branchName], project.rootPath);
+  } catch {}
 
   cleanupTerminal(tree.worktreePath);
 
@@ -680,11 +773,14 @@ async function removeProjectFromWorkspace(
   if (projectIndex < 0) throw new Error("Project is no longer open.");
 
   const project = state.projects[projectIndex];
-  if (project.trees.length > 0) {
+  const projectReason = await projectBrokenReason(project.rootPath);
+  if (project.trees.length > 0 && !projectReason) {
     throw new Error(
       `Remove all trees from ${project.name} before removing the project from Canopy.`,
     );
   }
+
+  for (const tree of project.trees) cleanupTerminal(tree.worktreePath);
 
   state.projects.splice(projectIndex, 1);
 

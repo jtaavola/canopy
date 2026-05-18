@@ -1,10 +1,16 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
 
+export type BrokenStatus = {
+  isBroken: boolean;
+  reason?: string;
+};
+
 export type WorkspaceTree = {
   id: string;
   name: string;
   worktreePath: string;
   branchName: string;
+  status?: BrokenStatus;
 };
 
 export type WorkspaceProject = {
@@ -13,6 +19,7 @@ export type WorkspaceProject = {
   rootPath: string;
   slug: string;
   trees: WorkspaceTree[];
+  status?: BrokenStatus;
 };
 
 export type WorkspaceState = {
