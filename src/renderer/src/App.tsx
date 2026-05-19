@@ -400,6 +400,8 @@ function App(): React.JSX.Element {
     ReadonlySet<string>
   >(() => new Set());
   const activeWorktreePathRef = useRef<string | null>(null);
+  const projectManagerSizeRef = useRef(projectManagerSize);
+  const explorerSizeRef = useRef(explorerSize);
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects],
@@ -438,20 +440,28 @@ function App(): React.JSX.Element {
   }, [activeWorktreePath]);
 
   useEffect(() => {
+    projectManagerSizeRef.current = projectManagerSize;
+  }, [projectManagerSize]);
+
+  useEffect(() => {
+    explorerSizeRef.current = explorerSize;
+  }, [explorerSize]);
+
+  useEffect(() => {
     const panel = projectManagerPanelRef.current;
     if (!panel) return;
 
-    if (isProjectManagerVisible) panel.resize(projectManagerSize);
+    if (isProjectManagerVisible) panel.resize(projectManagerSizeRef.current);
     else panel.collapse();
-  }, [isProjectManagerVisible, projectManagerSize]);
+  }, [isProjectManagerVisible]);
 
   useEffect(() => {
     const panel = projectExplorerPanelRef.current;
     if (!panel) return;
 
-    if (isExplorerContentVisible) panel.resize(explorerSize);
+    if (isExplorerContentVisible) panel.resize(explorerSizeRef.current);
     else panel.collapse();
-  }, [explorerSize, isExplorerContentVisible]);
+  }, [isExplorerContentVisible]);
 
   useEffect(() => {
     let isMounted = true;
@@ -798,6 +808,17 @@ function App(): React.JSX.Element {
             orientation="horizontal"
             defaultLayout={workspaceDefaultLayout}
             className="min-h-0"
+            onLayoutChanged={(layout) => {
+              const nextProjectManagerSize = layout["project-manager-panel"];
+              const nextExplorerSize = layout["project-explorer-panel"];
+
+              if (nextProjectManagerSize > 0) {
+                setProjectManagerSize(`${nextProjectManagerSize}%`);
+              }
+              if (nextExplorerSize > 0) {
+                setExplorerSize(`${nextExplorerSize}%`);
+              }
+            }}
           >
             <ResizablePanel
               id="project-manager-panel"
@@ -807,11 +828,6 @@ function App(): React.JSX.Element {
               defaultSize={projectManagerSize}
               minSize="10%"
               maxSize="40%"
-              onResize={(size) => {
-                if (size.asPercentage > 0) {
-                  setProjectManagerSize(`${size.asPercentage}%`);
-                }
-              }}
               className="min-w-0"
             >
               {isProjectManagerVisible ? (
@@ -915,11 +931,6 @@ function App(): React.JSX.Element {
               defaultSize={explorerSize}
               minSize="10%"
               maxSize="40%"
-              onResize={(size) => {
-                if (size.asPercentage > 0) {
-                  setExplorerSize(`${size.asPercentage}%`);
-                }
-              }}
               className="min-w-0"
             >
               {isExplorerContentVisible && activeWorktreePath ? (
