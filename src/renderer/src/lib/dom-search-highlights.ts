@@ -14,12 +14,6 @@ export function searchHighlightCss(names: DomSearchHighlightNames): string {
 `;
 }
 
-type TextSegment = {
-  node: Text;
-  start: number;
-  end: number;
-};
-
 type DomSearchHighlightNames = {
   match: string;
   active: string;
@@ -82,27 +76,22 @@ export class DomSearchHighlights {
   }
 
   private updateHighlights(): void {
-    const highlights = (CSS as unknown as { highlights?: HighlightRegistry })
-      .highlights;
+    const highlights = getHighlightRegistry();
     if (!highlights || typeof Highlight === "undefined") return;
 
+    const activeRange = this.#ranges[this.#activeIndex];
     highlights.set(
       this.#highlightNames.match,
-      new Highlight(
-        ...this.#ranges.filter((_, index) => index !== this.#activeIndex),
-      ),
+      new Highlight(...this.#ranges.filter((range) => range !== activeRange)),
     );
     highlights.set(
       this.#highlightNames.active,
-      this.#ranges[this.#activeIndex]
-        ? new Highlight(this.#ranges[this.#activeIndex])
-        : new Highlight(),
+      activeRange ? new Highlight(activeRange) : new Highlight(),
     );
   }
 
   private clearHighlights(): void {
-    const highlights = (CSS as unknown as { highlights?: HighlightRegistry })
-      .highlights;
+    const highlights = getHighlightRegistry();
     highlights?.delete(this.#highlightNames.match);
     highlights?.delete(this.#highlightNames.active);
   }
@@ -114,77 +103,84 @@ export class DomSearchHighlights {
  * line boundaries.
  */
 function findRangesInText(root: Node, query: string): Range[] {
-  const ranges: Range[] = [];
+  return getSearchUnits(root).flatMap((unit) => findRangesInUnit(unit, query));
+}
+
+function findRangesInUnit(root: Node, query: string): Range[] {
+  const textNodes = getTextNodes(root);
+  const haystack = textNodes
+    .map((node) => node.data)
+    .join("")
+    .toLocaleLowerCase();
   const needle = query.toLocaleLowerCase();
-  const searchUnits = getSearchUnits(root);
+  const ranges: Range[] = [];
 
-  for (const unit of searchUnits) {
-    const segments = getTextSegments(unit);
-    const text = segments.map((segment) => segment.node.data).join("");
-    const haystack = text.toLocaleLowerCase();
+  for (
     let start = haystack.indexOf(needle);
-
-    while (start !== -1) {
-      const startPosition = findTextPosition(segments, start);
-      const endPosition = findTextPosition(segments, start + query.length);
-
-      if (startPosition && endPosition) {
-        const range = document.createRange();
-        range.setStart(startPosition.node, startPosition.offset);
-        range.setEnd(endPosition.node, endPosition.offset);
-        ranges.push(range);
-      }
-
-      start = haystack.indexOf(needle, start + query.length);
-    }
+    start !== -1;
+    start = haystack.indexOf(needle, start + query.length)
+  ) {
+    const range = createRange(textNodes, start, start + query.length);
+    if (range) ranges.push(range);
   }
 
   return ranges;
 }
 
 function getSearchUnits(root: Node): Node[] {
-  const queryableRoot =
-    root instanceof Element || root instanceof DocumentFragment ? root : null;
-  const lineElements = queryableRoot
-    ? Array.from(queryableRoot.querySelectorAll<HTMLElement>("[data-line]"))
-    : [];
+  if (!(root instanceof Element || root instanceof DocumentFragment)) {
+    return [root];
+  }
 
-  return lineElements.length ? lineElements : [root];
+  const lines = Array.from(root.querySelectorAll<HTMLElement>("[data-line]"));
+  return lines.length ? lines : [root];
 }
 
-function getTextSegments(root: Node): TextSegment[] {
-  const segments: TextSegment[] = [];
+function getTextNodes(root: Node): Text[] {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let textLength = 0;
+  const nodes: Text[] = [];
 
   while (walker.nextNode()) {
     const node = walker.currentNode;
-    if (!(node instanceof Text) || node.data.length === 0) continue;
-
-    segments.push({
-      node,
-      start: textLength,
-      end: textLength + node.data.length,
-    });
-    textLength += node.data.length;
+    if (node instanceof Text && node.data.length > 0) nodes.push(node);
   }
 
-  return segments;
+  return nodes;
+}
+
+function createRange(
+  textNodes: readonly Text[],
+  start: number,
+  end: number,
+): Range | null {
+  const startPosition = findTextPosition(textNodes, start);
+  const endPosition = findTextPosition(textNodes, end);
+  if (!startPosition || !endPosition) return null;
+
+  const range = document.createRange();
+  range.setStart(startPosition.node, startPosition.offset);
+  range.setEnd(endPosition.node, endPosition.offset);
+  return range;
 }
 
 function findTextPosition(
-  segments: TextSegment[],
+  textNodes: readonly Text[],
   offset: number,
 ): { node: Text; offset: number } | null {
-  for (const [index, segment] of segments.entries()) {
-    const isLastSegment = index === segments.length - 1;
+  for (const [index, node] of textNodes.entries()) {
+    const isLastNode = index === textNodes.length - 1;
     if (
-      offset >= segment.start &&
-      (offset < segment.end || (isLastSegment && offset === segment.end))
+      offset < node.data.length ||
+      (isLastNode && offset === node.data.length)
     ) {
-      return { node: segment.node, offset: offset - segment.start };
+      return { node, offset };
     }
+    offset -= node.data.length;
   }
 
   return null;
+}
+
+function getHighlightRegistry(): HighlightRegistry | undefined {
+  return (CSS as unknown as { highlights?: HighlightRegistry }).highlights;
 }
