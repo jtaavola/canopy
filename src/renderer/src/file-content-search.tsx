@@ -8,17 +8,13 @@ import {
 } from "@tabler/icons-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  clearSearchHighlights,
-  findInText,
-  SEARCH_HIGHLIGHT_CSS,
-  updateSearchHighlights,
-} from "./lib/find-in-text";
+import { TextSearchSession } from "./lib/text-search-session";
 
 type SearchState = {
   controls: React.ReactNode;
   attachContainer: (node: HTMLDivElement | null) => void;
   handlePostRender: () => void;
+  highlightCss: string;
 };
 
 export function useFileContentSearch(options?: {
@@ -31,7 +27,7 @@ export function useFileContentSearch(options?: {
   const [matchCount, setMatchCount] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchRangesRef = useRef<Range[]>([]);
+  const textSearchSessionRef = useRef(new TextSearchSession());
   const searchStateRef = useRef({ isOpen: false, query: "", index: 0 });
   const runSearchRef = useRef<(query: string, requestedIndex?: number) => void>(
     () => {},
@@ -58,9 +54,8 @@ export function useFileContentSearch(options?: {
     return roots.length ? roots : [el];
   }, []);
 
-  const scrollToMatch = useCallback((index: number) => {
+  const scrollToMatch = useCallback((range: Range | null) => {
     const el = containerRef.current;
-    const range = searchRangesRef.current[index];
     if (!el || !range) return;
 
     const matchRect = range.getBoundingClientRect();
@@ -74,28 +69,16 @@ export function useFileContentSearch(options?: {
 
   const runSearch = useCallback(
     (query: string, requestedIndex = 0) => {
-      clearSearchHighlights();
-
-      if (!query || !containerRef.current) {
-        searchRangesRef.current = [];
-        setMatchCount(0);
-        setSearchIndex(0);
-        return;
-      }
-
-      const ranges = getSearchRoots().flatMap((root) =>
-        findInText(root, query),
+      const result = textSearchSessionRef.current.search(
+        getSearchRoots(),
+        query,
+        requestedIndex,
       );
-      const nextIndex = ranges.length
-        ? ((requestedIndex % ranges.length) + ranges.length) % ranges.length
-        : 0;
 
-      searchRangesRef.current = ranges;
-      searchStateRef.current.index = nextIndex;
-      setMatchCount(ranges.length);
-      setSearchIndex(nextIndex);
-      updateSearchHighlights(ranges, nextIndex);
-      scrollToMatch(nextIndex);
+      searchStateRef.current.index = result.activeIndex;
+      setMatchCount(result.matchCount);
+      setSearchIndex(result.activeIndex);
+      scrollToMatch(result.activeRange);
     },
     [getSearchRoots, scrollToMatch],
   );
@@ -130,7 +113,7 @@ export function useFileContentSearch(options?: {
 
   useEffect(() => {
     if (!isSearchOpen) {
-      clearSearchHighlights();
+      textSearchSessionRef.current.clear();
       return;
     }
 
@@ -154,7 +137,7 @@ export function useFileContentSearch(options?: {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isSearchOpen]);
 
-  useEffect(() => () => clearSearchHighlights(), []);
+  useEffect(() => () => textSearchSessionRef.current.clear(), []);
 
   const openSearch = useCallback(() => {
     setIsSearchOpen(true);
@@ -225,6 +208,7 @@ export function useFileContentSearch(options?: {
     controls,
     attachContainer: (node) => (containerRef.current = node),
     handlePostRender,
+    highlightCss: textSearchSessionRef.current.highlightCss,
   };
 }
 
@@ -258,10 +242,10 @@ export function SearchableFile({
       themeType: "dark" as const,
       overflow: "scroll" as const,
       disableFileHeader: true,
-      unsafeCSS: SEARCH_HIGHLIGHT_CSS,
+      unsafeCSS: search.highlightCss,
       onPostRender: search.handlePostRender,
     }),
-    [search.handlePostRender],
+    [search.handlePostRender, search.highlightCss],
   );
 
   return (
@@ -288,10 +272,10 @@ export function SearchableChangedDiff({
   const options = useMemo(
     () => ({
       themeType: "system" as const,
-      unsafeCSS: SEARCH_HIGHLIGHT_CSS,
+      unsafeCSS: search.highlightCss,
       onPostRender: search.handlePostRender,
     }),
-    [search.handlePostRender],
+    [search.handlePostRender, search.highlightCss],
   );
 
   return (
