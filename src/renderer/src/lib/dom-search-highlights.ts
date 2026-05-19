@@ -1,6 +1,6 @@
 const SEARCH_HIGHLIGHT_PREFIX = "file-preview-search";
 
-export function searchHighlightCss(names: TextSearchHighlightNames): string {
+export function searchHighlightCss(names: DomSearchHighlightNames): string {
   return `
   ::highlight(${names.match}) {
     background-color: rgb(253 224 71 / 0.6);
@@ -20,23 +20,23 @@ type TextSegment = {
   end: number;
 };
 
-type TextSearchHighlightNames = {
+type DomSearchHighlightNames = {
   match: string;
   active: string;
 };
 
-export type TextSearchResult = {
+export type DomSearchResult = {
   matchCount: number;
   activeIndex: number;
   activeRange: Range | null;
 };
 
-export class TextSearchSession {
+export class DomSearchHighlights {
   readonly highlightCss: string;
 
   #ranges: Range[] = [];
   #activeIndex = 0;
-  #highlightNames: TextSearchHighlightNames;
+  #highlightNames: DomSearchHighlightNames;
 
   constructor(id = crypto.randomUUID()) {
     this.#highlightNames = {
@@ -50,7 +50,7 @@ export class TextSearchSession {
     roots: readonly Node[],
     query: string,
     requestedIndex = 0,
-  ): TextSearchResult {
+  ): DomSearchResult {
     this.clear();
 
     if (!query || !roots.length) {
@@ -73,7 +73,7 @@ export class TextSearchSession {
     this.clearHighlights();
   }
 
-  result(): TextSearchResult {
+  result(): DomSearchResult {
     return {
       matchCount: this.#ranges.length,
       activeIndex: this.#activeIndex,

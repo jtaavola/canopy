@@ -1,7 +1,7 @@
 import { Button } from "@renderer/components/ui/button";
 import { IconX } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
-import { SearchableFileContent } from "./searchable-file-content";
+import { SearchableFile } from "./searchable-file";
 
 export function FilePreview({
   projectPath,
@@ -71,14 +71,14 @@ export function FilePreview({
   }
 
   return (
-    <SearchableFileContent disabled={!renderedFile}>
+    <SearchableFile disabled={!renderedFile}>
       <section
         className="flex size-full min-h-0 flex-col bg-background"
         aria-label="File preview"
       >
         <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
           <span className="min-w-0 flex-1 truncate">{filePath}</span>
-          <SearchableFileContent.Controls />
+          <SearchableFile.Controls />
           <Button
             type="button"
             variant="ghost"
@@ -95,12 +95,12 @@ export function FilePreview({
             {message}
           </div>
         ) : renderedFile ? (
-          <SearchableFileContent.File
+          <SearchableFile.File
             file={renderedFile}
             className="min-h-0 flex-1 overflow-auto bg-[#0d1117]"
           />
         ) : null}
       </section>
-    </SearchableFileContent>
+    </SearchableFile>
   );
 }

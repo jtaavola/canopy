@@ -16,7 +16,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { TextSearchSession } from "./lib/text-search-session";
+import { DomSearchHighlights } from "./lib/dom-search-highlights";
 
 type SearchState = {
   controls: React.ReactNode;
@@ -25,9 +25,9 @@ type SearchState = {
   highlightCss: string;
 };
 
-const SearchableFileContentContext = createContext<SearchState | null>(null);
+const SearchableFileContext = createContext<SearchState | null>(null);
 
-export function SearchableFileContent({
+export function SearchableFile({
   disabled,
   label,
   children,
@@ -36,26 +36,26 @@ export function SearchableFileContent({
   label?: string;
   children: React.ReactNode;
 }): React.JSX.Element {
-  const search = useSearchableFileContent({ disabled, label });
+  const search = useSearchableFile({ disabled, label });
 
   return (
-    <SearchableFileContentContext.Provider value={search}>
+    <SearchableFileContext.Provider value={search}>
       {children}
-    </SearchableFileContentContext.Provider>
+    </SearchableFileContext.Provider>
   );
 }
 
-function useSearchableFileContentContext(): SearchState {
-  const search = useContext(SearchableFileContentContext);
+function useSearchableFileContext(): SearchState {
+  const search = useContext(SearchableFileContext);
   if (!search) {
     throw new Error(
-      "SearchableFileContent submodules must be rendered inside SearchableFileContent.",
+      "SearchableFile submodules must be rendered inside SearchableFile.",
     );
   }
   return search;
 }
 
-function useSearchableFileContent(options?: {
+function useSearchableFile(options?: {
   disabled?: boolean;
   label?: string;
 }): SearchState {
@@ -65,7 +65,7 @@ function useSearchableFileContent(options?: {
   const [matchCount, setMatchCount] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const textSearchSessionRef = useRef(new TextSearchSession());
+  const domSearchHighlightsRef = useRef(new DomSearchHighlights());
   const { disabled = false, label = "Search file" } = options ?? {};
   const searchStateRef = useRef({ isOpen: false, query: "", index: 0 });
   const runSearchRef = useRef<(query: string, requestedIndex?: number) => void>(
@@ -108,7 +108,7 @@ function useSearchableFileContent(options?: {
 
   const runSearch = useCallback(
     (query: string, requestedIndex = 0) => {
-      const result = textSearchSessionRef.current.search(
+      const result = domSearchHighlightsRef.current.search(
         getSearchRoots(),
         query,
         requestedIndex,
@@ -152,7 +152,7 @@ function useSearchableFileContent(options?: {
 
   useEffect(() => {
     if (!isSearchOpen) {
-      textSearchSessionRef.current.clear();
+      domSearchHighlightsRef.current.clear();
       return;
     }
 
@@ -181,7 +181,7 @@ function useSearchableFileContent(options?: {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [disabled, isSearchOpen]);
 
-  useEffect(() => () => textSearchSessionRef.current.clear(), []);
+  useEffect(() => () => domSearchHighlightsRef.current.clear(), []);
 
   const openSearch = useCallback(() => {
     if (disabled) return;
@@ -251,7 +251,7 @@ function useSearchableFileContent(options?: {
     controls,
     attachContainer: (node) => (containerRef.current = node),
     handlePostRender,
-    highlightCss: textSearchSessionRef.current.highlightCss,
+    highlightCss: domSearchHighlightsRef.current.highlightCss,
   };
 }
 
@@ -271,18 +271,18 @@ function SearchNavButton({
   );
 }
 
-function SearchableFileContentControls(): React.JSX.Element {
-  return <>{useSearchableFileContentContext().controls}</>;
+function SearchableFileControls(): React.JSX.Element {
+  return <>{useSearchableFileContext().controls}</>;
 }
 
-function SearchableFileContentFile({
+function SearchableFileFile({
   file,
   className,
 }: {
   file: React.ComponentProps<typeof File>["file"];
   className?: string;
 }): React.JSX.Element {
-  const search = useSearchableFileContentContext();
+  const search = useSearchableFileContext();
   const options = useMemo(
     () => ({
       themeType: "dark" as const,
@@ -306,14 +306,14 @@ function SearchableFileContentFile({
   );
 }
 
-function SearchableFileContentChangedDiff({
+function SearchableFileChangedDiff({
   patch,
   className,
 }: {
   patch: string;
   className?: string;
 }): React.JSX.Element {
-  const search = useSearchableFileContentContext();
+  const search = useSearchableFileContext();
   const options = useMemo(
     () => ({
       themeType: "system" as const,
@@ -330,6 +330,6 @@ function SearchableFileContentChangedDiff({
   );
 }
 
-SearchableFileContent.Controls = SearchableFileContentControls;
-SearchableFileContent.File = SearchableFileContentFile;
-SearchableFileContent.ChangedDiff = SearchableFileContentChangedDiff;
+SearchableFile.Controls = SearchableFileControls;
+SearchableFile.File = SearchableFileFile;
+SearchableFile.ChangedDiff = SearchableFileChangedDiff;

@@ -1,7 +1,7 @@
 import { Button } from "@renderer/components/ui/button";
 import { IconX } from "@tabler/icons-react";
 import type { ChangedFile } from "../../preload/index.d";
-import { SearchableFileContent } from "./searchable-file-content";
+import { SearchableFile } from "./searchable-file";
 
 export function ChangedDiff({
   projectPath,
@@ -40,14 +40,14 @@ export function ChangedDiff({
   }, [filePath, projectPath]);
 
   return (
-    <SearchableFileContent disabled={!patch} label="Search diff">
+    <SearchableFile disabled={!patch} label="Search diff">
       <section
         className="flex size-full min-h-0 flex-col bg-background"
         aria-label="Changed file diff"
       >
         <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
           <span className="min-w-0 flex-1 truncate">{filePath}</span>
-          <SearchableFileContent.Controls />
+          <SearchableFile.Controls />
           <Button
             type="button"
             variant="ghost"
@@ -60,7 +60,7 @@ export function ChangedDiff({
           </Button>
         </header>
         {patch ? (
-          <SearchableFileContent.ChangedDiff
+          <SearchableFile.ChangedDiff
             patch={patch}
             className="min-h-0 flex-1 overflow-auto bg-neutral-950"
           />
@@ -70,7 +70,7 @@ export function ChangedDiff({
           </div>
         )}
       </section>
-    </SearchableFileContent>
+    </SearchableFile>
   );
 }
 
