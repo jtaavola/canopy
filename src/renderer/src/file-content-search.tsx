@@ -1,40 +1,45 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { File, PatchDiff } from "@pierre/diffs/react";
+import { Button } from "@renderer/components/ui/button";
 import {
   IconChevronDown,
   IconChevronUp,
   IconSearch,
   IconX,
 } from "@tabler/icons-react";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   clearSearchHighlights,
   findInText,
+  SEARCH_HIGHLIGHT_CSS,
   updateSearchHighlights,
-} from "@renderer/lib/find-in-text";
-import { SearchNavButton } from "@renderer/components/ui/search-nav-button";
-import { Button } from "@renderer/components/ui/button";
+} from "./lib/find-in-text";
 
-export function useFileSearch(
-  containerRef: React.RefObject<Node | null>,
-  options?: { disabled?: boolean; label?: string },
-) {
+type SearchState = {
+  controls: React.ReactNode;
+  attachContainer: (node: HTMLDivElement | null) => void;
+  handlePostRender: () => void;
+};
+
+export function useFileContentSearch(options?: {
+  disabled?: boolean;
+  label?: string;
+}): SearchState {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
   const [matchCount, setMatchCount] = useState(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchRangesRef = useRef<Range[]>([]);
-  const searchStateRef = useRef({
-    isOpen: false,
-    query: "",
-    index: 0,
-  });
+  const searchStateRef = useRef({ isOpen: false, query: "", index: 0 });
   const runSearchRef = useRef<(query: string, requestedIndex?: number) => void>(
     () => {},
   );
 
   const getSearchRoots = useCallback((): Node[] => {
     const el = containerRef.current;
-    if (!el || !(el instanceof Element)) return [];
+    if (!el) return [];
 
     const roots: Node[] = [];
     for (const fileContainer of el.querySelectorAll<HTMLElement>(
@@ -51,24 +56,21 @@ export function useFileSearch(
     }
 
     return roots.length ? roots : [el];
-  }, [containerRef]);
+  }, []);
 
-  const scrollToMatch = useCallback(
-    (index: number) => {
-      const el = containerRef.current;
-      const range = searchRangesRef.current[index];
-      if (!el || !(el instanceof Element) || !range) return;
+  const scrollToMatch = useCallback((index: number) => {
+    const el = containerRef.current;
+    const range = searchRangesRef.current[index];
+    if (!el || !range) return;
 
-      const matchRect = range.getBoundingClientRect();
-      const elRect = el.getBoundingClientRect();
+    const matchRect = range.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
 
-      el.scrollTo?.({
-        top: el.scrollTop + matchRect.top - elRect.top - 80,
-        behavior: "smooth",
-      });
-    },
-    [containerRef],
-  );
+    el.scrollTo?.({
+      top: el.scrollTop + matchRect.top - elRect.top - 80,
+      behavior: "smooth",
+    });
+  }, []);
 
   const runSearch = useCallback(
     (query: string, requestedIndex = 0) => {
@@ -84,7 +86,6 @@ export function useFileSearch(
       const ranges = getSearchRoots().flatMap((root) =>
         findInText(root, query),
       );
-
       const nextIndex = ranges.length
         ? ((requestedIndex % ranges.length) + ranges.length) % ranges.length
         : 0;
@@ -96,7 +97,7 @@ export function useFileSearch(
       updateSearchHighlights(ranges, nextIndex);
       scrollToMatch(nextIndex);
     },
-    [getSearchRoots, scrollToMatch, containerRef],
+    [getSearchRoots, scrollToMatch],
   );
 
   useEffect(() => {
@@ -153,23 +154,18 @@ export function useFileSearch(
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isSearchOpen]);
 
-  useEffect(
-    () => () => {
-      clearSearchHighlights();
-    },
-    [],
-  );
+  useEffect(() => () => clearSearchHighlights(), []);
 
   const openSearch = useCallback(() => {
     setIsSearchOpen(true);
     window.setTimeout(() => searchInputRef.current?.select());
   }, []);
 
-  const closeSearch = useCallback(() => {
-    setIsSearchOpen(false);
-  }, []);
+  const closeSearch = useCallback(() => setIsSearchOpen(false), []);
 
-  const searchBarContent = (
+  const { disabled = false, label = "Search file" } = options ?? {};
+
+  const searchBar = (
     <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 normal-case tracking-normal">
       <IconSearch className="size-3.5" aria-hidden="true" />
       <input
@@ -209,12 +205,8 @@ export function useFileSearch(
     </div>
   );
 
-  const searchBar = isSearchOpen ? searchBarContent : null;
-
-  const { disabled = false, label = "Search file" } = options ?? {};
-
-  const searchControls = isSearchOpen ? (
-    searchBarContent
+  const controls = isSearchOpen ? (
+    searchBar
   ) : (
     <Button
       type="button"
@@ -223,26 +215,88 @@ export function useFileSearch(
       aria-label={label}
       title={`${label} (⌘F)`}
       onClick={openSearch}
-      disabled={disabled && !isSearchOpen}
+      disabled={disabled}
     >
       <IconSearch aria-hidden="true" data-icon="inline-start" />
     </Button>
   );
 
   return {
-    isSearchOpen,
-    setIsSearchOpen,
-    searchQuery,
-    setSearchQuery,
-    searchIndex,
-    matchCount,
-    searchInputRef,
-    searchBar,
-    searchControls,
-    openSearch,
-    closeSearch,
+    controls,
+    attachContainer: (node) => (containerRef.current = node),
     handlePostRender,
   };
 }
 
+function SearchNavButton({
+  children,
+  ...props
+}: {
+  "aria-label": string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <Button type="button" variant="ghost" size="icon-xs" {...props}>
+      {children}
+    </Button>
+  );
+}
 
+export function SearchableFile({
+  file,
+  search,
+  className,
+}: {
+  file: React.ComponentProps<typeof File>["file"];
+  search: SearchState;
+  className?: string;
+}): React.JSX.Element {
+  const options = useMemo(
+    () => ({
+      themeType: "dark" as const,
+      overflow: "scroll" as const,
+      disableFileHeader: true,
+      unsafeCSS: SEARCH_HIGHLIGHT_CSS,
+      onPostRender: search.handlePostRender,
+    }),
+    [search.handlePostRender],
+  );
+
+  return (
+    <div ref={search.attachContainer} className={className}>
+      <File
+        file={file}
+        className="block min-h-full text-xs"
+        options={options}
+        disableWorkerPool
+      />
+    </div>
+  );
+}
+
+export function SearchableChangedDiff({
+  patch,
+  search,
+  className,
+}: {
+  patch: string;
+  search: SearchState;
+  className?: string;
+}): React.JSX.Element {
+  const options = useMemo(
+    () => ({
+      themeType: "system" as const,
+      unsafeCSS: SEARCH_HIGHLIGHT_CSS,
+      onPostRender: search.handlePostRender,
+    }),
+    [search.handlePostRender],
+  );
+
+  return (
+    <div ref={search.attachContainer} className={className}>
+      <PatchDiff patch={patch} disableWorkerPool options={options} />
+    </div>
+  );
+}

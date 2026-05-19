@@ -1,9 +1,7 @@
-import { File } from "@pierre/diffs/react";
 import { Button } from "@renderer/components/ui/button";
 import { IconX } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { SEARCH_HIGHLIGHT_CSS } from "@renderer/lib/find-in-text";
-import { useFileSearch } from "./hooks/useFileSearch";
+import { useEffect, useMemo, useState } from "react";
+import { SearchableFile, useFileContentSearch } from "./file-content-search";
 
 export function FilePreview({
   projectPath,
@@ -18,7 +16,6 @@ export function FilePreview({
     ReturnType<typeof window.api.fileTree.preview>
   > | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const previewRef = useRef<HTMLDivElement>(null);
 
   const renderedFile = useMemo(
     () =>
@@ -32,10 +29,7 @@ export function FilePreview({
     [filePath, preview, projectPath],
   );
 
-  const { searchControls, handlePostRender } = useFileSearch(
-    previewRef,
-    { disabled: !renderedFile },
-  );
+  const search = useFileContentSearch({ disabled: !renderedFile });
 
   useEffect(() => {
     let isMounted = true;
@@ -63,19 +57,6 @@ export function FilePreview({
     };
   }, [filePath, projectPath]);
 
-
-
-  const fileRenderOptions = useMemo(
-    () => ({
-      themeType: "dark" as const,
-      overflow: "scroll" as const,
-      disableFileHeader: true,
-      unsafeCSS: SEARCH_HIGHLIGHT_CSS,
-      onPostRender: handlePostRender,
-    }),
-    [handlePostRender],
-  );
-
   let message: string | null = null;
 
   if (isLoading) message = "Loading file preview…";
@@ -98,7 +79,7 @@ export function FilePreview({
     >
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
         <span className="min-w-0 flex-1 truncate">{filePath}</span>
-        {searchControls}
+        {search.controls}
         <Button
           type="button"
           variant="ghost"
@@ -115,17 +96,11 @@ export function FilePreview({
           {message}
         </div>
       ) : renderedFile ? (
-        <div
-          ref={previewRef}
+        <SearchableFile
+          file={renderedFile}
+          search={search}
           className="min-h-0 flex-1 overflow-auto bg-[#0d1117]"
-        >
-          <File
-            file={renderedFile}
-            className="block min-h-full text-xs"
-            options={fileRenderOptions}
-            disableWorkerPool
-          />
-        </div>
+        />
       ) : null}
     </section>
   );

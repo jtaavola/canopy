@@ -1,10 +1,10 @@
-import { PatchDiff } from "@pierre/diffs/react";
 import { Button } from "@renderer/components/ui/button";
 import { IconX } from "@tabler/icons-react";
-import { useMemo, useRef } from "react";
 import type { ChangedFile } from "../../preload/index.d";
-import { SEARCH_HIGHLIGHT_CSS } from "@renderer/lib/find-in-text";
-import { useFileSearch } from "./hooks/useFileSearch";
+import {
+  SearchableChangedDiff,
+  useFileContentSearch,
+} from "./file-content-search";
 
 export function ChangedDiff({
   projectPath,
@@ -17,11 +17,10 @@ export function ChangedDiff({
 }): React.JSX.Element {
   const [patch, setPatch] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState("Loading diff…");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { searchControls, handlePostRender } = useFileSearch(
-    containerRef,
-    { disabled: !patch, label: "Search diff" },
-  );
+  const search = useFileContentSearch({
+    disabled: !patch,
+    label: "Search diff",
+  });
 
   React.useEffect(() => {
     let isMounted = true;
@@ -48,15 +47,6 @@ export function ChangedDiff({
     };
   }, [filePath, projectPath]);
 
-  const patchDiffOptions = useMemo(
-    () => ({
-      themeType: "system" as const,
-      unsafeCSS: SEARCH_HIGHLIGHT_CSS,
-      onPostRender: handlePostRender,
-    }),
-    [handlePostRender],
-  );
-
   return (
     <section
       className="flex size-full min-h-0 flex-col bg-background"
@@ -64,7 +54,7 @@ export function ChangedDiff({
     >
       <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
         <span className="min-w-0 flex-1 truncate">{filePath}</span>
-        {searchControls}
+        {search.controls}
         <Button
           type="button"
           variant="ghost"
@@ -76,20 +66,17 @@ export function ChangedDiff({
           <IconX aria-hidden="true" data-icon="inline-start" />
         </Button>
       </header>
-      <div
-        ref={containerRef}
-        className="min-h-0 flex-1 overflow-auto bg-neutral-950"
-      >
-        {patch ? (
-          <PatchDiff
-            patch={patch}
-            disableWorkerPool
-            options={patchDiffOptions}
-          />
-        ) : (
-          <div className="p-6 text-neutral-400 text-sm">{message}</div>
-        )}
-      </div>
+      {patch ? (
+        <SearchableChangedDiff
+          patch={patch}
+          search={search}
+          className="min-h-0 flex-1 overflow-auto bg-neutral-950"
+        />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto bg-neutral-950 p-6 text-neutral-400 text-sm">
+          {message}
+        </div>
+      )}
     </section>
   );
 }
