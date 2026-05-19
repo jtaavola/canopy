@@ -24,6 +24,7 @@ import {
 } from "electron";
 import * as pty from "node-pty";
 import icon from "../../resources/icon.png?asset";
+import { isAllowedExternalUrl } from "./external-links";
 import { TREE_NAMES } from "./tree-names";
 
 const execFileAsync = promisify(execFile);
@@ -296,10 +297,7 @@ function setTerminalWorking(terminalId: string, isWorking: boolean): void {
   emitTerminalStatus(terminalId, isWorking);
 }
 
-function updateTerminalWorkingStatus(
-  terminalId: string,
-  data: string,
-): void {
+function updateTerminalWorkingStatus(terminalId: string, data: string): void {
   const text = data.replace(ANSI_CONTROL_SEQUENCE, "");
 
   if (text.includes(TERMINAL_WORKING_TEXT)) {
@@ -1119,6 +1117,16 @@ function registerGitChangesIpc(): void {
   );
 }
 
+function registerExternalLinkIpc(): void {
+  ipcMain.handle("external:open", async (event, url?: unknown) => {
+    if (!validateSender(event.senderFrame)) return false;
+    if (!isAllowedExternalUrl(url)) return false;
+
+    await shell.openExternal(url);
+    return true;
+  });
+}
+
 function registerTerminalIpc(): void {
   ipcMain.handle(
     "terminal:start",
@@ -1259,7 +1267,9 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
+    if (isAllowedExternalUrl(details.url)) {
+      shell.openExternal(details.url);
+    }
     return { action: "deny" };
   });
 
@@ -1287,6 +1297,7 @@ app.whenReady().then(() => {
   });
 
   registerProjectIpc();
+  registerExternalLinkIpc();
   registerFileTreeIpc();
   registerGitChangesIpc();
   registerTerminalIpc();
