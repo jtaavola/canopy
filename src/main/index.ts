@@ -30,8 +30,13 @@ const execFileAsync = promisify(execFile);
 
 const terminals = new Map<string, pty.IPty>();
 const terminalBuffers = new Map<string, string[]>();
+const workingTerminalIds = new Set<string>();
+const terminalWorkingClearTimers = new Map<string, NodeJS.Timeout>();
 const activeTerminalsByWebContents = new Map<number, string>();
 const TERMINAL_BUFFER_CHUNK_LIMIT = 1000;
+const TERMINAL_WORKING_TEXT = "Working...";
+const TERMINAL_WORKING_CLEAR_DELAY_MS = 1000;
+const ANSI_CONTROL_SEQUENCE = /\x1B\[[0-?]*[ -/]*[@-~]/g;
 
 const EXCLUDED_TREE_ENTRIES = new Set([
   ".git",
@@ -267,6 +272,58 @@ function getShell(): string {
   );
 }
 
+function emitTerminalStatus(terminalId: string, isWorking: boolean): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.webContents.isDestroyed()) {
+      window.webContents.send("terminal:status-changed", {
+        terminalId,
+        isWorking,
+      });
+    }
+  }
+}
+
+function setTerminalWorking(terminalId: string, isWorking: boolean): void {
+  const clearTimer = terminalWorkingClearTimers.get(terminalId);
+  if (clearTimer) clearTimeout(clearTimer);
+  terminalWorkingClearTimers.delete(terminalId);
+
+  if (workingTerminalIds.has(terminalId) === isWorking) return;
+
+  if (isWorking) workingTerminalIds.add(terminalId);
+  else workingTerminalIds.delete(terminalId);
+
+  emitTerminalStatus(terminalId, isWorking);
+}
+
+function updateTerminalWorkingStatus(
+  terminalId: string,
+  data: string,
+): void {
+  const text = data.replace(ANSI_CONTROL_SEQUENCE, "");
+
+  if (text.includes(TERMINAL_WORKING_TEXT)) {
+    setTerminalWorking(terminalId, true);
+    return;
+  }
+
+  if (!workingTerminalIds.has(terminalId)) return;
+
+  const clearTimer = terminalWorkingClearTimers.get(terminalId);
+  if (clearTimer) clearTimeout(clearTimer);
+
+  // Pi redraws its status line while response output streams, which can make
+  // `Working...` briefly disappear. Debounce clearing the status so continued
+  // terminal activity keeps the tree marked as working until output settles.
+  terminalWorkingClearTimers.set(
+    terminalId,
+    setTimeout(() => {
+      terminalWorkingClearTimers.delete(terminalId);
+      setTerminalWorking(terminalId, false);
+    }, TERMINAL_WORKING_CLEAR_DELAY_MS),
+  );
+}
+
 function cleanupTerminal(terminalId: string): void {
   const terminal = terminals.get(terminalId);
 
@@ -276,6 +333,7 @@ function cleanupTerminal(terminalId: string): void {
   }
 
   terminalBuffers.delete(terminalId);
+  setTerminalWorking(terminalId, false);
 }
 
 function cleanupWebContentsTerminals(webContentsId: number): void {
@@ -1085,6 +1143,10 @@ function registerTerminalIpc(): void {
           if (event.sender.isDestroyed()) break;
           event.sender.send("terminal:data", data);
         }
+        event.sender.send("terminal:status-changed", {
+          terminalId,
+          isWorking: workingTerminalIds.has(terminalId),
+        });
         return;
       }
 
@@ -1101,6 +1163,7 @@ function registerTerminalIpc(): void {
       terminalBuffers.set(terminalId, []);
 
       terminal.onData((data) => {
+        updateTerminalWorkingStatus(terminalId, data);
         const buffer = terminalBuffers.get(terminalId) ?? [];
         buffer.push(data);
         if (buffer.length > TERMINAL_BUFFER_CHUNK_LIMIT) buffer.shift();
@@ -1116,6 +1179,7 @@ function registerTerminalIpc(): void {
       terminal.onExit(({ exitCode, signal }) => {
         terminals.delete(terminalId);
         terminalBuffers.delete(terminalId);
+        setTerminalWorking(terminalId, false);
 
         if (!event.sender.isDestroyed()) {
           event.sender.send("terminal:exit", { terminalId, exitCode, signal });

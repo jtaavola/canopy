@@ -45,6 +45,7 @@ function ProjectManager({
   onSelectTree,
   onDeleteTree,
   onRemoveProject,
+  workingTerminalIds,
 }: {
   projects: readonly WorkspaceProject[];
   activeProjectId: string;
@@ -56,6 +57,7 @@ function ProjectManager({
   onSelectTree: (projectId: string, treeId: string) => void;
   onDeleteTree: (projectId: string, treeId: string) => void;
   onRemoveProject: (projectId: string) => void;
+  workingTerminalIds: ReadonlySet<string>;
 }): React.JSX.Element {
   return (
     <aside
@@ -139,6 +141,9 @@ function ProjectManager({
                     const isActiveTree =
                       isActiveProject && tree.id === activeTreeId;
                     const isBrokenTree = tree.status?.isBroken === true;
+                    const isWorkingTree = workingTerminalIds.has(
+                      tree.worktreePath,
+                    );
 
                     return (
                       <li key={tree.id} className="group/tree relative mb-1">
@@ -161,7 +166,11 @@ function ProjectManager({
                           onClick={() => onSelectTree(project.id, tree.id)}
                         >
                           <IconSeedling
-                            className="size-4 shrink-0 text-neutral-500"
+                            className={cn(
+                              "size-4 shrink-0 text-neutral-500",
+                              isWorkingTree &&
+                                "animate-pulse text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]",
+                            )}
                             aria-hidden="true"
                           />
                           <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
@@ -369,6 +378,9 @@ function App(): React.JSX.Element {
   const [isExplorerVisible, setIsExplorerVisible] = useState(true);
   const [projectManagerSize, setProjectManagerSize] = useState("20%");
   const [explorerSize, setExplorerSize] = useState("25%");
+  const [workingTerminalIds, setWorkingTerminalIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects],
@@ -438,6 +450,19 @@ function App(): React.JSX.Element {
     projects,
     resolvedActiveTreeId,
   ]);
+
+  useEffect(() => {
+    return window.api.terminal.onStatusChanged(({ terminalId, isWorking }) => {
+      setWorkingTerminalIds((currentTerminalIds) => {
+        const nextTerminalIds = new Set(currentTerminalIds);
+
+        if (isWorking) nextTerminalIds.add(terminalId);
+        else nextTerminalIds.delete(terminalId);
+
+        return nextTerminalIds;
+      });
+    });
+  }, []);
 
   useEffect(() => {
     const terminalElement = terminalElementRef.current;
@@ -717,6 +742,7 @@ function App(): React.JSX.Element {
                     onSelectTree={selectTree}
                     onDeleteTree={deleteTree}
                     onRemoveProject={removeProject}
+                    workingTerminalIds={workingTerminalIds}
                   />
                 </ResizablePanel>
                 <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
