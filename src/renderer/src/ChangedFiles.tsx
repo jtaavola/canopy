@@ -1,10 +1,7 @@
 import { Button } from "@renderer/components/ui/button";
 import { IconX } from "@tabler/icons-react";
 import type { ChangedFile } from "../../preload/index.d";
-import {
-  SearchableChangedDiff,
-  useFileContentSearch,
-} from "./file-content-search";
+import { SearchableFileContent } from "./searchable-file-content";
 
 export function ChangedDiff({
   projectPath,
@@ -17,11 +14,6 @@ export function ChangedDiff({
 }): React.JSX.Element {
   const [patch, setPatch] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState("Loading diff…");
-  const search = useFileContentSearch({
-    disabled: !patch,
-    label: "Search diff",
-  });
-
   React.useEffect(() => {
     let isMounted = true;
 
@@ -48,36 +40,37 @@ export function ChangedDiff({
   }, [filePath, projectPath]);
 
   return (
-    <section
-      className="flex size-full min-h-0 flex-col bg-background"
-      aria-label="Changed file diff"
-    >
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
-        <span className="min-w-0 flex-1 truncate">{filePath}</span>
-        {search.controls}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Close changed file diff and return to terminal"
-          title="Close changed file diff"
-          onClick={onClose}
-        >
-          <IconX aria-hidden="true" data-icon="inline-start" />
-        </Button>
-      </header>
-      {patch ? (
-        <SearchableChangedDiff
-          patch={patch}
-          search={search}
-          className="min-h-0 flex-1 overflow-auto bg-neutral-950"
-        />
-      ) : (
-        <div className="min-h-0 flex-1 overflow-auto bg-neutral-950 p-6 text-neutral-400 text-sm">
-          {message}
-        </div>
-      )}
-    </section>
+    <SearchableFileContent disabled={!patch} label="Search diff">
+      <section
+        className="flex size-full min-h-0 flex-col bg-background"
+        aria-label="Changed file diff"
+      >
+        <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
+          <span className="min-w-0 flex-1 truncate">{filePath}</span>
+          <SearchableFileContent.Controls />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Close changed file diff and return to terminal"
+            title="Close changed file diff"
+            onClick={onClose}
+          >
+            <IconX aria-hidden="true" data-icon="inline-start" />
+          </Button>
+        </header>
+        {patch ? (
+          <SearchableFileContent.ChangedDiff
+            patch={patch}
+            className="min-h-0 flex-1 overflow-auto bg-neutral-950"
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto bg-neutral-950 p-6 text-neutral-400 text-sm">
+            {message}
+          </div>
+        )}
+      </section>
+    </SearchableFileContent>
   );
 }
 

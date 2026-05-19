@@ -7,7 +7,15 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { TextSearchSession } from "./lib/text-search-session";
 
 type SearchState = {
@@ -17,7 +25,37 @@ type SearchState = {
   highlightCss: string;
 };
 
-export function useFileContentSearch(options?: {
+const SearchableFileContentContext = createContext<SearchState | null>(null);
+
+export function SearchableFileContent({
+  disabled,
+  label,
+  children,
+}: {
+  disabled?: boolean;
+  label?: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  const search = useSearchableFileContent({ disabled, label });
+
+  return (
+    <SearchableFileContentContext.Provider value={search}>
+      {children}
+    </SearchableFileContentContext.Provider>
+  );
+}
+
+function useSearchableFileContentContext(): SearchState {
+  const search = useContext(SearchableFileContentContext);
+  if (!search) {
+    throw new Error(
+      "SearchableFileContent submodules must be rendered inside SearchableFileContent.",
+    );
+  }
+  return search;
+}
+
+function useSearchableFileContent(options?: {
   disabled?: boolean;
   label?: string;
 }): SearchState {
@@ -233,15 +271,18 @@ function SearchNavButton({
   );
 }
 
-export function SearchableFile({
+function SearchableFileContentControls(): React.JSX.Element {
+  return <>{useSearchableFileContentContext().controls}</>;
+}
+
+function SearchableFileContentFile({
   file,
-  search,
   className,
 }: {
   file: React.ComponentProps<typeof File>["file"];
-  search: SearchState;
   className?: string;
 }): React.JSX.Element {
+  const search = useSearchableFileContentContext();
   const options = useMemo(
     () => ({
       themeType: "dark" as const,
@@ -265,15 +306,14 @@ export function SearchableFile({
   );
 }
 
-export function SearchableChangedDiff({
+function SearchableFileContentChangedDiff({
   patch,
-  search,
   className,
 }: {
   patch: string;
-  search: SearchState;
   className?: string;
 }): React.JSX.Element {
+  const search = useSearchableFileContentContext();
   const options = useMemo(
     () => ({
       themeType: "system" as const,
@@ -289,3 +329,7 @@ export function SearchableChangedDiff({
     </div>
   );
 }
+
+SearchableFileContent.Controls = SearchableFileContentControls;
+SearchableFileContent.File = SearchableFileContentFile;
+SearchableFileContent.ChangedDiff = SearchableFileContentChangedDiff;
