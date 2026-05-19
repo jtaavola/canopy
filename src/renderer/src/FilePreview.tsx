@@ -71,7 +71,7 @@ export function FilePreview({
   }
 
   return (
-    <SearchableFile disabled={!renderedFile}>
+    <SearchableFile>
       <section
         className="flex size-full min-h-0 flex-col bg-background"
         aria-label="File preview"

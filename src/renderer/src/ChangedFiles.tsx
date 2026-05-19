@@ -40,7 +40,7 @@ export function ChangedDiff({
   }, [filePath, projectPath]);
 
   return (
-    <SearchableFile disabled={!patch} label="Search diff">
+    <SearchableFile searchLabel="Search diff">
       <section
         className="flex size-full min-h-0 flex-col bg-background"
         aria-label="Changed file diff"

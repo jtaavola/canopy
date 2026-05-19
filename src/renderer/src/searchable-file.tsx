@@ -28,15 +28,13 @@ type SearchState = {
 const SearchableFileContext = createContext<SearchState | null>(null);
 
 export function SearchableFile({
-  disabled,
-  label,
+  searchLabel,
   children,
 }: {
-  disabled?: boolean;
-  label?: string;
+  searchLabel?: string;
   children: React.ReactNode;
 }): React.JSX.Element {
-  const search = useSearchableFile({ disabled, label });
+  const search = useSearchableFile({ searchLabel });
 
   return (
     <SearchableFileContext.Provider value={search}>
@@ -55,10 +53,7 @@ function useSearchableFileContext(): SearchState {
   return search;
 }
 
-function useSearchableFile(options?: {
-  disabled?: boolean;
-  label?: string;
-}): SearchState {
+function useSearchableFile(options?: { searchLabel?: string }): SearchState {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
@@ -66,7 +61,7 @@ function useSearchableFile(options?: {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const domSearchHighlightsRef = useRef(new DomSearchHighlights());
-  const { disabled = false, label = "Search file" } = options ?? {};
+  const { searchLabel = "Search file" } = options ?? {};
   const searchStateRef = useRef({ isOpen: false, query: "", index: 0 });
   const runSearchRef = useRef<(query: string, requestedIndex?: number) => void>(
     () => {},
@@ -161,13 +156,8 @@ function useSearchableFile(options?: {
   }, [isSearchOpen, runSearch, searchQuery]);
 
   useEffect(() => {
-    if (disabled) setIsSearchOpen(false);
-  }, [disabled]);
-
-  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        if (disabled) return;
         event.preventDefault();
         setIsSearchOpen(true);
         window.setTimeout(() => searchInputRef.current?.select());
@@ -179,15 +169,14 @@ function useSearchableFile(options?: {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [disabled, isSearchOpen]);
+  }, [isSearchOpen]);
 
   useEffect(() => () => domSearchHighlightsRef.current.clear(), []);
 
   const openSearch = useCallback(() => {
-    if (disabled) return;
     setIsSearchOpen(true);
     window.setTimeout(() => searchInputRef.current?.select());
-  }, [disabled]);
+  }, []);
 
   const closeSearch = useCallback(() => setIsSearchOpen(false), []);
 
@@ -238,10 +227,9 @@ function useSearchableFile(options?: {
       type="button"
       variant="ghost"
       size="icon-xs"
-      aria-label={label}
-      title={`${label} (⌘F)`}
+      aria-label={searchLabel}
+      title={`${searchLabel} (⌘F)`}
       onClick={openSearch}
-      disabled={disabled}
     >
       <IconSearch aria-hidden="true" data-icon="inline-start" />
     </Button>
