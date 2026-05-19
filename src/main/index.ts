@@ -31,11 +31,9 @@ const execFileAsync = promisify(execFile);
 const terminals = new Map<string, pty.IPty>();
 const terminalBuffers = new Map<string, string[]>();
 const terminalWorkingStatuses = new Map<string, boolean>();
-const terminalVisibleLines = new Map<string, string[]>();
 const terminalWorkingClearTimers = new Map<string, NodeJS.Timeout>();
 const activeTerminalsByWebContents = new Map<number, string>();
 const TERMINAL_BUFFER_CHUNK_LIMIT = 1000;
-const TERMINAL_VISIBLE_LINE_LIMIT = 200;
 
 const EXCLUDED_TREE_ENTRIES = new Set([
   ".git",
@@ -301,32 +299,18 @@ function setTerminalWorkingStatus(
   emitTerminalStatusChanged(terminalId, isWorking);
 }
 
-function updateTerminalWorkingStatus(
-  terminalId: string,
-  isWorking: boolean,
-): void {
-  if (isWorking) {
-    setTerminalWorkingStatus(terminalId, true);
-    return;
-  }
-
+function scheduleTerminalWorkingClear(terminalId: string): void {
   if (terminalWorkingStatuses.get(terminalId) !== true) return;
   if (terminalWorkingClearTimers.has(terminalId)) return;
 
   // Pi redraws its status line while response output streams, which can make
-  // `Working...` briefly disappear from our line model. Delay clearing the
-  // status so the tree icon does not flicker during those transient redraws.
-  // If `Working...` reappears before this timer fires, setTerminalWorkingStatus
-  // clears the pending timer when it confirms/sets the working state to true.
+  // `Working...` briefly disappear. Delay clearing the status so the tree icon
+  // does not flicker during those transient redraws.
   terminalWorkingClearTimers.set(
     terminalId,
     setTimeout(() => {
       terminalWorkingClearTimers.delete(terminalId);
-      if (
-        !terminalVisibleLines.get(terminalId)?.join("\n").includes("Working...")
-      ) {
-        setTerminalWorkingStatus(terminalId, false);
-      }
+      setTerminalWorkingStatus(terminalId, false);
     }, 1000),
   );
 }
@@ -343,34 +327,14 @@ function updateTerminalWorkingStatusFromData(
   terminalId: string,
   data: string,
 ): void {
-  const lines = terminalVisibleLines.get(terminalId) ?? [""];
   const text = stripAnsiControlSequences(data);
 
-  for (const character of text) {
-    if (character === "\r") {
-      lines[lines.length - 1] = "";
-      continue;
-    }
-
-    if (character === "\n") {
-      lines.push("");
-      if (lines.length > TERMINAL_VISIBLE_LINE_LIMIT) lines.shift();
-      continue;
-    }
-
-    if (character === "\b" || character === "\u007f") {
-      lines[lines.length - 1] = lines[lines.length - 1].slice(0, -1);
-      continue;
-    }
-
-    lines[lines.length - 1] += character;
+  if (text.includes("Working...")) {
+    setTerminalWorkingStatus(terminalId, true);
+    return;
   }
 
-  terminalVisibleLines.set(terminalId, lines);
-  updateTerminalWorkingStatus(
-    terminalId,
-    lines.join("\n").includes("Working..."),
-  );
+  scheduleTerminalWorkingClear(terminalId);
 }
 
 function cleanupTerminal(terminalId: string): void {
@@ -382,7 +346,6 @@ function cleanupTerminal(terminalId: string): void {
   }
 
   terminalBuffers.delete(terminalId);
-  terminalVisibleLines.delete(terminalId);
   setTerminalWorkingStatus(terminalId, false);
   terminalWorkingStatuses.delete(terminalId);
 }
@@ -1212,7 +1175,6 @@ function registerTerminalIpc(): void {
 
       terminals.set(terminalId, terminal);
       terminalBuffers.set(terminalId, []);
-      terminalVisibleLines.set(terminalId, [""]);
       setTerminalWorkingStatus(terminalId, false);
 
       terminal.onData((data) => {
@@ -1232,7 +1194,6 @@ function registerTerminalIpc(): void {
       terminal.onExit(({ exitCode, signal }) => {
         terminals.delete(terminalId);
         terminalBuffers.delete(terminalId);
-        terminalVisibleLines.delete(terminalId);
         setTerminalWorkingStatus(terminalId, false);
 
         if (!event.sender.isDestroyed()) {
