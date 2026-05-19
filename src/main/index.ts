@@ -308,11 +308,13 @@ function updateTerminalWorkingStatus(
   }
 
   if (!workingTerminalIds.has(terminalId)) return;
-  if (terminalWorkingClearTimers.has(terminalId)) return;
+
+  const clearTimer = terminalWorkingClearTimers.get(terminalId);
+  if (clearTimer) clearTimeout(clearTimer);
 
   // Pi redraws its status line while response output streams, which can make
-  // `Working...` briefly disappear. Delay clearing the status so the tree icon
-  // does not flicker during those transient redraws.
+  // `Working...` briefly disappear. Debounce clearing the status so continued
+  // terminal activity keeps the tree marked as working until output settles.
   terminalWorkingClearTimers.set(
     terminalId,
     setTimeout(() => {
