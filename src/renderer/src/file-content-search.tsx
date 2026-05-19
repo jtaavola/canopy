@@ -28,6 +28,7 @@ export function useFileContentSearch(options?: {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const textSearchSessionRef = useRef(new TextSearchSession());
+  const { disabled = false, label = "Search file" } = options ?? {};
   const searchStateRef = useRef({ isOpen: false, query: "", index: 0 });
   const runSearchRef = useRef<(query: string, requestedIndex?: number) => void>(
     () => {},
@@ -122,8 +123,13 @@ export function useFileContentSearch(options?: {
   }, [isSearchOpen, runSearch, searchQuery]);
 
   useEffect(() => {
+    if (disabled) setIsSearchOpen(false);
+  }, [disabled]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+        if (disabled) return;
         event.preventDefault();
         setIsSearchOpen(true);
         window.setTimeout(() => searchInputRef.current?.select());
@@ -135,18 +141,17 @@ export function useFileContentSearch(options?: {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isSearchOpen]);
+  }, [disabled, isSearchOpen]);
 
   useEffect(() => () => textSearchSessionRef.current.clear(), []);
 
   const openSearch = useCallback(() => {
+    if (disabled) return;
     setIsSearchOpen(true);
     window.setTimeout(() => searchInputRef.current?.select());
-  }, []);
+  }, [disabled]);
 
   const closeSearch = useCallback(() => setIsSearchOpen(false), []);
-
-  const { disabled = false, label = "Search file" } = options ?? {};
 
   const searchBar = (
     <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 normal-case tracking-normal">
