@@ -30,7 +30,7 @@ const execFileAsync = promisify(execFile);
 
 const terminals = new Map<string, pty.IPty>();
 const terminalBuffers = new Map<string, string[]>();
-const terminalWorkingStatuses = new Map<string, boolean>();
+const workingTerminalIds = new Set<string>();
 const terminalWorkingClearTimers = new Map<string, NodeJS.Timeout>();
 const activeTerminalsByWebContents = new Map<number, string>();
 const TERMINAL_BUFFER_CHUNK_LIMIT = 1000;
@@ -283,24 +283,24 @@ function emitTerminalStatusChanged(
   }
 }
 
-function setTerminalWorkingStatus(
-  terminalId: string,
-  isWorking: boolean,
-): void {
+function setTerminalWorking(terminalId: string, isWorking: boolean): void {
   const clearTimer = terminalWorkingClearTimers.get(terminalId);
   if (clearTimer) {
     clearTimeout(clearTimer);
     terminalWorkingClearTimers.delete(terminalId);
   }
 
-  if (terminalWorkingStatuses.get(terminalId) === isWorking) return;
+  const wasWorking = workingTerminalIds.has(terminalId);
+  if (wasWorking === isWorking) return;
 
-  terminalWorkingStatuses.set(terminalId, isWorking);
+  if (isWorking) workingTerminalIds.add(terminalId);
+  else workingTerminalIds.delete(terminalId);
+
   emitTerminalStatusChanged(terminalId, isWorking);
 }
 
 function scheduleTerminalWorkingClear(terminalId: string): void {
-  if (terminalWorkingStatuses.get(terminalId) !== true) return;
+  if (!workingTerminalIds.has(terminalId)) return;
   if (terminalWorkingClearTimers.has(terminalId)) return;
 
   // Pi redraws its status line while response output streams, which can make
@@ -310,17 +310,13 @@ function scheduleTerminalWorkingClear(terminalId: string): void {
     terminalId,
     setTimeout(() => {
       terminalWorkingClearTimers.delete(terminalId);
-      setTerminalWorkingStatus(terminalId, false);
+      setTerminalWorking(terminalId, false);
     }, 1000),
   );
 }
 
 function stripAnsiControlSequences(value: string): string {
-  const escapeCharacter = String.fromCharCode(27);
-  return value.replace(
-    new RegExp(`${escapeCharacter}\\[[0-?]*[ -/]*[@-~]`, "g"),
-    "",
-  );
+  return value.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "");
 }
 
 function updateTerminalWorkingStatusFromData(
@@ -330,7 +326,7 @@ function updateTerminalWorkingStatusFromData(
   const text = stripAnsiControlSequences(data);
 
   if (text.includes("Working...")) {
-    setTerminalWorkingStatus(terminalId, true);
+    setTerminalWorking(terminalId, true);
     return;
   }
 
@@ -346,8 +342,7 @@ function cleanupTerminal(terminalId: string): void {
   }
 
   terminalBuffers.delete(terminalId);
-  setTerminalWorkingStatus(terminalId, false);
-  terminalWorkingStatuses.delete(terminalId);
+  setTerminalWorking(terminalId, false);
 }
 
 function cleanupWebContentsTerminals(webContentsId: number): void {
@@ -1159,7 +1154,7 @@ function registerTerminalIpc(): void {
         }
         event.sender.send("terminal:status-changed", {
           terminalId,
-          isWorking: terminalWorkingStatuses.get(terminalId) === true,
+          isWorking: workingTerminalIds.has(terminalId),
         });
         return;
       }
@@ -1175,7 +1170,6 @@ function registerTerminalIpc(): void {
 
       terminals.set(terminalId, terminal);
       terminalBuffers.set(terminalId, []);
-      setTerminalWorkingStatus(terminalId, false);
 
       terminal.onData((data) => {
         updateTerminalWorkingStatusFromData(terminalId, data);
@@ -1194,7 +1188,7 @@ function registerTerminalIpc(): void {
       terminal.onExit(({ exitCode, signal }) => {
         terminals.delete(terminalId);
         terminalBuffers.delete(terminalId);
-        setTerminalWorkingStatus(terminalId, false);
+        setTerminalWorking(terminalId, false);
 
         if (!event.sender.isDestroyed()) {
           event.sender.send("terminal:exit", { terminalId, exitCode, signal });
