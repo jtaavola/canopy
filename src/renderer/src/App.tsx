@@ -21,6 +21,7 @@ import {
 } from "@tabler/icons-react";
 import { FitAddon } from "@xterm/addon-fit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type PanelImperativeHandle } from "react-resizable-panels";
 import { Terminal } from "xterm";
 import type { WorkspaceProject } from "../../preload/index.d";
 import { ChangedDiff, ChangedFilesList } from "./ChangedFiles";
@@ -375,6 +376,8 @@ function EmptyProjectState({
 
 function App(): React.JSX.Element {
   const terminalElementRef = useRef<HTMLDivElement>(null);
+  const projectManagerPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const projectExplorerPanelRef = useRef<PanelImperativeHandle | null>(null);
   const [projects, setProjects] = useState<readonly WorkspaceProject[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeTreeId, setActiveTreeId] = useState<string | null>(null);
@@ -413,10 +416,42 @@ function App(): React.JSX.Element {
   const isActiveTreeBroken = activeTree?.status?.isBroken === true;
   const activeWorktreePath =
     activeTree && !isActiveTreeBroken ? activeTree.worktreePath : null;
+  const isExplorerContentVisible =
+    isExplorerVisible && Boolean(activeWorktreePath);
+  const terminalDefaultSize = `${
+    100 -
+    (isProjectManagerVisible ? Number.parseFloat(projectManagerSize) : 0) -
+    (isExplorerContentVisible ? Number.parseFloat(explorerSize) : 0)
+  }%`;
+  const workspaceDefaultLayout = {
+    "project-manager-panel": isProjectManagerVisible
+      ? Number.parseFloat(projectManagerSize)
+      : 0,
+    "terminal-panel": Number.parseFloat(terminalDefaultSize),
+    "project-explorer-panel": isExplorerContentVisible
+      ? Number.parseFloat(explorerSize)
+      : 0,
+  };
 
   useEffect(() => {
     activeWorktreePathRef.current = activeWorktreePath;
   }, [activeWorktreePath]);
+
+  useEffect(() => {
+    const panel = projectManagerPanelRef.current;
+    if (!panel) return;
+
+    if (isProjectManagerVisible) panel.resize(projectManagerSize);
+    else panel.collapse();
+  }, [isProjectManagerVisible, projectManagerSize]);
+
+  useEffect(() => {
+    const panel = projectExplorerPanelRef.current;
+    if (!panel) return;
+
+    if (isExplorerContentVisible) panel.resize(explorerSize);
+    else panel.collapse();
+  }, [explorerSize, isExplorerContentVisible]);
 
   useEffect(() => {
     let isMounted = true;
@@ -759,39 +794,47 @@ function App(): React.JSX.Element {
             <Spinner aria-hidden="true" />
           </section>
         ) : activeProject ? (
-          <ResizablePanelGroup orientation="horizontal" className="min-h-0">
-            {isProjectManagerVisible ? (
-              <>
-                <ResizablePanel
-                  id="project-manager-panel"
-                  defaultSize={projectManagerSize}
-                  minSize="10%"
-                  maxSize="40%"
-                  onResize={(size) =>
-                    setProjectManagerSize(`${size.asPercentage}%`)
-                  }
-                  className="min-w-0"
-                >
-                  <ProjectManager
-                    projects={projects}
-                    activeProjectId={activeProjectId ?? ""}
-                    activeTreeId={resolvedActiveTreeId ?? ""}
-                    isOpeningProject={isOpeningProject}
-                    isCreatingTree={isCreatingTree}
-                    onOpenProject={openProject}
-                    onCreateTree={createTree}
-                    onSelectTree={selectTree}
-                    onDeleteTree={deleteTree}
-                    onRemoveProject={removeProject}
-                    workingTerminalIds={workingTerminalIds}
-                    completedTerminalIds={completedTerminalIds}
-                  />
-                </ResizablePanel>
-                <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
-              </>
-            ) : null}
+          <ResizablePanelGroup
+            orientation="horizontal"
+            defaultLayout={workspaceDefaultLayout}
+            className="min-h-0"
+          >
+            <ResizablePanel
+              id="project-manager-panel"
+              panelRef={projectManagerPanelRef}
+              collapsible
+              collapsedSize="0%"
+              defaultSize={projectManagerSize}
+              minSize="10%"
+              maxSize="40%"
+              onResize={(size) => {
+                if (size.asPercentage > 0) {
+                  setProjectManagerSize(`${size.asPercentage}%`);
+                }
+              }}
+              className="min-w-0"
+            >
+              {isProjectManagerVisible ? (
+                <ProjectManager
+                  projects={projects}
+                  activeProjectId={activeProjectId ?? ""}
+                  activeTreeId={resolvedActiveTreeId ?? ""}
+                  isOpeningProject={isOpeningProject}
+                  isCreatingTree={isCreatingTree}
+                  onOpenProject={openProject}
+                  onCreateTree={createTree}
+                  onSelectTree={selectTree}
+                  onDeleteTree={deleteTree}
+                  onRemoveProject={removeProject}
+                  workingTerminalIds={workingTerminalIds}
+                  completedTerminalIds={completedTerminalIds}
+                />
+              ) : null}
+            </ResizablePanel>
+            <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
             <ResizablePanel
               id="terminal-panel"
+              defaultSize={terminalDefaultSize}
               minSize="30%"
               className="h-full min-w-0"
             >
@@ -863,25 +906,30 @@ function App(): React.JSX.Element {
                 />
               )}
             </ResizablePanel>
-            {isExplorerVisible && activeWorktreePath ? (
-              <>
-                <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
-                <ResizablePanel
-                  id="project-explorer-panel"
-                  defaultSize={explorerSize}
-                  minSize="10%"
-                  maxSize="40%"
-                  onResize={(size) => setExplorerSize(`${size.asPercentage}%`)}
-                  className="min-w-0"
-                >
-                  <ProjectExplorer
-                    projectPath={activeWorktreePath}
-                    onOpenFile={openFilePreview}
-                    onOpenChangedFile={openChangedFilePreview}
-                  />
-                </ResizablePanel>
-              </>
-            ) : null}
+            <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
+            <ResizablePanel
+              id="project-explorer-panel"
+              panelRef={projectExplorerPanelRef}
+              collapsible
+              collapsedSize="0%"
+              defaultSize={explorerSize}
+              minSize="10%"
+              maxSize="40%"
+              onResize={(size) => {
+                if (size.asPercentage > 0) {
+                  setExplorerSize(`${size.asPercentage}%`);
+                }
+              }}
+              className="min-w-0"
+            >
+              {isExplorerContentVisible && activeWorktreePath ? (
+                <ProjectExplorer
+                  projectPath={activeWorktreePath}
+                  onOpenFile={openFilePreview}
+                  onOpenChangedFile={openChangedFilePreview}
+                />
+              ) : null}
+            </ResizablePanel>
           </ResizablePanelGroup>
         ) : (
           <ProjectsLanding
