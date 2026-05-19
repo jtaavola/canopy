@@ -20,14 +20,14 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { FitAddon } from "@xterm/addon-fit";
+import { Terminal } from "@xterm/xterm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type PanelImperativeHandle } from "react-resizable-panels";
-import { Terminal } from "xterm";
 import type { WorkspaceProject } from "../../preload/index.d";
 import { ChangedDiff, ChangedFilesList } from "./ChangedFiles";
 import { FilePreview } from "./FilePreview";
 import ProjectsLanding from "./ProjectsLanding";
-import "xterm/css/xterm.css";
+import "@xterm/xterm/css/xterm.css";
 
 function getUserFacingErrorMessage(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -547,6 +547,9 @@ function App(): React.JSX.Element {
 
     const terminal = new Terminal({
       cursorBlink: true,
+      vtExtensions: {
+        kittyKeyboard: true,
+      },
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 13,
       theme: {
