@@ -11,8 +11,12 @@ import {
   updateSearchHighlights,
 } from "@renderer/lib/find-in-text";
 import { SearchNavButton } from "@renderer/components/ui/search-nav-button";
+import { Button } from "@renderer/components/ui/button";
 
-export function useFileSearch(containerRef: React.RefObject<Node | null>) {
+export function useFileSearch(
+  containerRef: React.RefObject<Node | null>,
+  options?: { disabled?: boolean; label?: string },
+) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
@@ -165,7 +169,7 @@ export function useFileSearch(containerRef: React.RefObject<Node | null>) {
     setIsSearchOpen(false);
   }, []);
 
-  const searchBar = isSearchOpen ? (
+  const searchBarContent = (
     <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 normal-case tracking-normal">
       <IconSearch className="size-3.5" aria-hidden="true" />
       <input
@@ -203,7 +207,27 @@ export function useFileSearch(containerRef: React.RefObject<Node | null>) {
         <IconX aria-hidden="true" data-icon="inline-start" />
       </SearchNavButton>
     </div>
-  ) : null;
+  );
+
+  const searchBar = isSearchOpen ? searchBarContent : null;
+
+  const { disabled = false, label = "Search file" } = options ?? {};
+
+  const searchControls = isSearchOpen ? (
+    searchBarContent
+  ) : (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      aria-label={label}
+      title={`${label} (⌘F)`}
+      onClick={openSearch}
+      disabled={disabled && !isSearchOpen}
+    >
+      <IconSearch aria-hidden="true" data-icon="inline-start" />
+    </Button>
+  );
 
   return {
     isSearchOpen,
@@ -214,6 +238,7 @@ export function useFileSearch(containerRef: React.RefObject<Node | null>) {
     matchCount,
     searchInputRef,
     searchBar,
+    searchControls,
     openSearch,
     closeSearch,
     handlePostRender,

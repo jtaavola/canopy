@@ -1,6 +1,6 @@
 import { File } from "@pierre/diffs/react";
 import { Button } from "@renderer/components/ui/button";
-import { IconSearch, IconX } from "@tabler/icons-react";
+import { IconX } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SEARCH_HIGHLIGHT_CSS } from "@renderer/lib/find-in-text";
 import { useFileSearch } from "./hooks/useFileSearch";
@@ -19,8 +19,23 @@ export function FilePreview({
   > | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const previewRef = useRef<HTMLDivElement>(null);
-  const { searchBar, openSearch, isSearchOpen, handlePostRender } =
-    useFileSearch(previewRef);
+
+  const renderedFile = useMemo(
+    () =>
+      preview?.status === "ok"
+        ? {
+            name: filePath,
+            contents: preview.content,
+            cacheKey: `${projectPath}:${filePath}:${preview.content.length}`,
+          }
+        : null,
+    [filePath, preview, projectPath],
+  );
+
+  const { searchControls, handlePostRender } = useFileSearch(
+    previewRef,
+    { disabled: !renderedFile },
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -48,17 +63,7 @@ export function FilePreview({
     };
   }, [filePath, projectPath]);
 
-  const renderedFile = useMemo(
-    () =>
-      preview?.status === "ok"
-        ? {
-            name: filePath,
-            contents: preview.content,
-            cacheKey: `${projectPath}:${filePath}:${preview.content.length}`,
-          }
-        : null,
-    [filePath, preview, projectPath],
-  );
+
 
   const fileRenderOptions = useMemo(
     () => ({
@@ -93,19 +98,7 @@ export function FilePreview({
     >
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
         <span className="min-w-0 flex-1 truncate">{filePath}</span>
-        {searchBar}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Search file"
-          title="Search file (⌘F)"
-          onClick={openSearch}
-          disabled={!renderedFile && !isSearchOpen}
-          hidden={isSearchOpen}
-        >
-          <IconSearch aria-hidden="true" data-icon="inline-start" />
-        </Button>
+        {searchControls}
         <Button
           type="button"
           variant="ghost"

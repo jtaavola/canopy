@@ -1,6 +1,6 @@
 import { PatchDiff } from "@pierre/diffs/react";
 import { Button } from "@renderer/components/ui/button";
-import { IconSearch, IconX } from "@tabler/icons-react";
+import { IconX } from "@tabler/icons-react";
 import { useMemo, useRef } from "react";
 import type { ChangedFile } from "../../preload/index.d";
 import { SEARCH_HIGHLIGHT_CSS } from "@renderer/lib/find-in-text";
@@ -18,8 +18,10 @@ export function ChangedDiff({
   const [patch, setPatch] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState("Loading diff…");
   const containerRef = useRef<HTMLDivElement>(null);
-  const { searchBar, openSearch, isSearchOpen, handlePostRender } =
-    useFileSearch(containerRef);
+  const { searchControls, handlePostRender } = useFileSearch(
+    containerRef,
+    { disabled: !patch, label: "Search diff" },
+  );
 
   React.useEffect(() => {
     let isMounted = true;
@@ -62,19 +64,7 @@ export function ChangedDiff({
     >
       <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
         <span className="min-w-0 flex-1 truncate">{filePath}</span>
-        {searchBar}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Search diff"
-          title="Search diff (⌘F)"
-          onClick={openSearch}
-          disabled={!patch && !isSearchOpen}
-          hidden={isSearchOpen}
-        >
-          <IconSearch aria-hidden="true" data-icon="inline-start" />
-        </Button>
+        {searchControls}
         <Button
           type="button"
           variant="ghost"
