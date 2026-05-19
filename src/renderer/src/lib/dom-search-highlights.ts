@@ -108,23 +108,61 @@ function findRangesInText(root: Node, query: string): Range[] {
 
 function findRangesInUnit(root: Node, query: string): Range[] {
   const textNodes = getTextNodes(root);
-  const haystack = textNodes
-    .map((node) => node.data)
-    .join("")
-    .toLocaleLowerCase();
+  const foldedText = foldTextWithOriginalOffsets(
+    textNodes.map((node) => node.data).join(""),
+  );
   const needle = query.toLocaleLowerCase();
   const ranges: Range[] = [];
 
   for (
-    let start = haystack.indexOf(needle);
+    let start = foldedText.text.indexOf(needle);
     start !== -1;
-    start = haystack.indexOf(needle, start + query.length)
+    start = foldedText.text.indexOf(needle, start + needle.length)
   ) {
-    const range = createRange(textNodes, start, start + query.length);
+    const end = start + needle.length;
+    const originalStart = foldedText.startOffsets[start];
+    const originalEnd = foldedText.endOffsets[end];
+    if (originalStart === undefined || originalEnd === undefined) continue;
+
+    const range = createRange(textNodes, originalStart, originalEnd);
     if (range) ranges.push(range);
   }
 
   return ranges;
+}
+
+function foldTextWithOriginalOffsets(text: string): {
+  text: string;
+  startOffsets: number[];
+  endOffsets: number[];
+} {
+  let foldedText = "";
+  const startOffsets: number[] = [];
+  const endOffsets: number[] = [0];
+
+  for (let originalOffset = 0; originalOffset < text.length; ) {
+    const char = text.codePointAt(originalOffset);
+    const originalLength = char && char > 0xffff ? 2 : 1;
+    const foldedChar = text
+      .slice(originalOffset, originalOffset + originalLength)
+      .toLocaleLowerCase();
+    const originalEnd = originalOffset + originalLength;
+
+    for (
+      let foldedOffset = 0;
+      foldedOffset < foldedChar.length;
+      foldedOffset++
+    ) {
+      startOffsets[foldedText.length + foldedOffset] = originalOffset;
+      endOffsets[foldedText.length + foldedOffset + 1] = originalEnd;
+    }
+
+    foldedText += foldedChar;
+    endOffsets[foldedText.length] = originalEnd;
+    originalOffset = originalEnd;
+  }
+
+  return { text: foldedText, startOffsets, endOffsets };
 }
 
 function getSearchUnits(root: Node): Node[] {
