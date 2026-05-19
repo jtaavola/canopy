@@ -22,7 +22,7 @@ import {
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type PanelImperativeHandle } from "react-resizable-panels";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { WorkspaceProject } from "../../preload/index.d";
 import { ChangedDiff, ChangedFilesList } from "./ChangedFiles";
 import { FilePreview } from "./FilePreview";
@@ -555,6 +555,15 @@ function App(): React.JSX.Element {
       theme: {
         background: "#111111",
         foreground: "#f2f2f2",
+      },
+      linkHandler: {
+        activate: (_event, text) => {
+          const confirmed = window.confirm(
+            `Do you want to navigate to ${text}?\n\nWARNING: This link could potentially be dangerous`,
+          );
+
+          if (confirmed) void window.api.external.open(text);
+        },
       },
     });
     const fitAddon = new FitAddon();

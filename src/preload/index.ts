@@ -49,6 +49,10 @@ const api = {
         filePath,
       }) as Promise<import("./index.d").ChangedFileDiffResult>,
   },
+  external: {
+    open: (url: string) =>
+      ipcRenderer.invoke("external:open", url) as Promise<boolean>,
+  },
   terminal: {
     start: (options: { cols: number; rows: number; cwd: string }) =>
       ipcRenderer.invoke("terminal:start", options),

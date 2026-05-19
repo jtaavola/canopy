@@ -78,6 +78,10 @@ export interface GitChangesApi {
   diff: (rootPath: string, filePath: string) => Promise<ChangedFileDiffResult>;
 }
 
+export interface ExternalApi {
+  open: (url: string) => Promise<boolean>;
+}
+
 export interface TerminalApi {
   start: (options: {
     cols: number;
@@ -108,6 +112,7 @@ declare global {
       project: ProjectApi;
       fileTree: FileTreeApi;
       gitChanges: GitChangesApi;
+      external: ExternalApi;
       terminal: TerminalApi;
     };
   }
