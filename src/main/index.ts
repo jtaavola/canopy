@@ -34,6 +34,9 @@ const workingTerminalIds = new Set<string>();
 const terminalWorkingClearTimers = new Map<string, NodeJS.Timeout>();
 const activeTerminalsByWebContents = new Map<number, string>();
 const TERMINAL_BUFFER_CHUNK_LIMIT = 1000;
+const TERMINAL_WORKING_TEXT = "Working...";
+const TERMINAL_WORKING_CLEAR_DELAY_MS = 1000;
+const ANSI_CONTROL_SEQUENCE = /\x1B\[[0-?]*[ -/]*[@-~]/g;
 
 const EXCLUDED_TREE_ENTRIES = new Set([
   ".git",
@@ -269,10 +272,7 @@ function getShell(): string {
   );
 }
 
-function emitTerminalStatusChanged(
-  terminalId: string,
-  isWorking: boolean,
-): void {
+function emitTerminalStatus(terminalId: string, isWorking: boolean): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.webContents.isDestroyed()) {
       window.webContents.send("terminal:status-changed", {
@@ -285,21 +285,28 @@ function emitTerminalStatusChanged(
 
 function setTerminalWorking(terminalId: string, isWorking: boolean): void {
   const clearTimer = terminalWorkingClearTimers.get(terminalId);
-  if (clearTimer) {
-    clearTimeout(clearTimer);
-    terminalWorkingClearTimers.delete(terminalId);
-  }
+  if (clearTimer) clearTimeout(clearTimer);
+  terminalWorkingClearTimers.delete(terminalId);
 
-  const wasWorking = workingTerminalIds.has(terminalId);
-  if (wasWorking === isWorking) return;
+  if (workingTerminalIds.has(terminalId) === isWorking) return;
 
   if (isWorking) workingTerminalIds.add(terminalId);
   else workingTerminalIds.delete(terminalId);
 
-  emitTerminalStatusChanged(terminalId, isWorking);
+  emitTerminalStatus(terminalId, isWorking);
 }
 
-function scheduleTerminalWorkingClear(terminalId: string): void {
+function updateTerminalWorkingStatus(
+  terminalId: string,
+  data: string,
+): void {
+  const text = data.replace(ANSI_CONTROL_SEQUENCE, "");
+
+  if (text.includes(TERMINAL_WORKING_TEXT)) {
+    setTerminalWorking(terminalId, true);
+    return;
+  }
+
   if (!workingTerminalIds.has(terminalId)) return;
   if (terminalWorkingClearTimers.has(terminalId)) return;
 
@@ -311,26 +318,8 @@ function scheduleTerminalWorkingClear(terminalId: string): void {
     setTimeout(() => {
       terminalWorkingClearTimers.delete(terminalId);
       setTerminalWorking(terminalId, false);
-    }, 1000),
+    }, TERMINAL_WORKING_CLEAR_DELAY_MS),
   );
-}
-
-function stripAnsiControlSequences(value: string): string {
-  return value.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "");
-}
-
-function updateTerminalWorkingStatusFromData(
-  terminalId: string,
-  data: string,
-): void {
-  const text = stripAnsiControlSequences(data);
-
-  if (text.includes("Working...")) {
-    setTerminalWorking(terminalId, true);
-    return;
-  }
-
-  scheduleTerminalWorkingClear(terminalId);
 }
 
 function cleanupTerminal(terminalId: string): void {
@@ -1172,7 +1161,7 @@ function registerTerminalIpc(): void {
       terminalBuffers.set(terminalId, []);
 
       terminal.onData((data) => {
-        updateTerminalWorkingStatusFromData(terminalId, data);
+        updateTerminalWorkingStatus(terminalId, data);
         const buffer = terminalBuffers.get(terminalId) ?? [];
         buffer.push(data);
         if (buffer.length > TERMINAL_BUFFER_CHUNK_LIMIT) buffer.shift();
