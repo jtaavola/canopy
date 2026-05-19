@@ -3,7 +3,8 @@ import { Button } from "@renderer/components/ui/button";
 import { IconSearch, IconX } from "@tabler/icons-react";
 import { useMemo, useRef } from "react";
 import type { ChangedFile } from "../../preload/index.d";
-import { SEARCH_HIGHLIGHT_CSS, useFileSearch } from "./hooks/useFileSearch";
+import { SEARCH_HIGHLIGHT_CSS } from "@renderer/lib/find-in-text";
+import { useFileSearch } from "./hooks/useFileSearch";
 
 export function ChangedDiff({
   projectPath,

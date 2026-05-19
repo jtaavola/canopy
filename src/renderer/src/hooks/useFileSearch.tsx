@@ -1,120 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-
-export const SEARCH_HIGHLIGHT_CSS = `
-  ::highlight(file-preview-search) {
-    background-color: rgb(253 224 71 / 0.6);
-    color: black;
-  }
-
-  ::highlight(file-preview-search-active) {
-    background-color: rgb(245 158 11);
-    color: black;
-  }
-`;
-
-type TextSegment = {
-  node: Text;
-  start: number;
-  end: number;
-};
-
-function createSearchRanges(root: Node, query: string): Range[] {
-  const ranges: Range[] = [];
-  const needle = query.toLocaleLowerCase();
-  const searchUnits = getSearchUnits(root);
-
-  for (const unit of searchUnits) {
-    const segments = getTextSegments(unit);
-    const text = segments.map((segment) => segment.node.data).join("");
-    const haystack = text.toLocaleLowerCase();
-    let start = haystack.indexOf(needle);
-
-    while (start !== -1) {
-      const startPosition = findTextPosition(segments, start);
-      const endPosition = findTextPosition(segments, start + query.length);
-
-      if (startPosition && endPosition) {
-        const range = document.createRange();
-        range.setStart(startPosition.node, startPosition.offset);
-        range.setEnd(endPosition.node, endPosition.offset);
-        ranges.push(range);
-      }
-
-      start = haystack.indexOf(needle, start + query.length);
-    }
-  }
-
-  return ranges;
-}
-
-function getSearchUnits(root: Node): Node[] {
-  const queryableRoot =
-    root instanceof Element || root instanceof DocumentFragment ? root : null;
-  const lineElements = queryableRoot
-    ? Array.from(queryableRoot.querySelectorAll<HTMLElement>("[data-line]"))
-    : [];
-
-  return lineElements.length ? lineElements : [root];
-}
-
-function getTextSegments(root: Node): TextSegment[] {
-  const segments: TextSegment[] = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let textLength = 0;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    if (!(node instanceof Text) || node.data.length === 0) continue;
-
-    segments.push({
-      node,
-      start: textLength,
-      end: textLength + node.data.length,
-    });
-    textLength += node.data.length;
-  }
-
-  return segments;
-}
-
-function findTextPosition(
-  segments: TextSegment[],
-  offset: number,
-): { node: Text; offset: number } | null {
-  for (const [index, segment] of segments.entries()) {
-    const isLastSegment = index === segments.length - 1;
-    if (
-      offset >= segment.start &&
-      (offset < segment.end || (isLastSegment && offset === segment.end))
-    ) {
-      return { node: segment.node, offset: offset - segment.start };
-    }
-  }
-
-  return null;
-}
-
-function clearSearchHighlights(): void {
-  const highlights = (CSS as unknown as { highlights?: HighlightRegistry })
-    .highlights;
-  highlights?.delete("file-preview-search");
-  highlights?.delete("file-preview-search-active");
-}
-
-function updateSearchHighlights(ranges: Range[], activeIndex: number): void {
-  const highlights = (CSS as unknown as { highlights?: HighlightRegistry })
-    .highlights;
-  if (!highlights || typeof Highlight === "undefined") return;
-
-  highlights.set(
-    "file-preview-search",
-    new Highlight(...ranges.filter((_, index) => index !== activeIndex)),
-  );
-  highlights.set(
-    "file-preview-search-active",
-    ranges[activeIndex] ? new Highlight(ranges[activeIndex]) : new Highlight(),
-  );
-}
+import {
+  IconChevronDown,
+  IconChevronUp,
+  IconSearch,
+  IconX,
+} from "@tabler/icons-react";
+import {
+  clearSearchHighlights,
+  findInText,
+  updateSearchHighlights,
+} from "@renderer/lib/find-in-text";
+import { SearchNavButton } from "@renderer/components/ui/search-nav-button";
 
 export function useFileSearch(containerRef: React.RefObject<Node | null>) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -182,7 +78,7 @@ export function useFileSearch(containerRef: React.RefObject<Node | null>) {
       }
 
       const ranges = getSearchRoots().flatMap((root) =>
-        createSearchRanges(root, query),
+        findInText(root, query),
       );
 
       const nextIndex = ranges.length
@@ -324,27 +220,4 @@ export function useFileSearch(containerRef: React.RefObject<Node | null>) {
   };
 }
 
-import { Button } from "@renderer/components/ui/button";
-// Stacked imports to avoid circular dependency on Button
-import {
-  IconChevronDown,
-  IconChevronUp,
-  IconSearch,
-  IconX,
-} from "@tabler/icons-react";
 
-function SearchNavButton({
-  children,
-  ...props
-}: {
-  "aria-label": string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <Button type="button" variant="ghost" size="icon-xs" {...props}>
-      {children}
-    </Button>
-  );
-}

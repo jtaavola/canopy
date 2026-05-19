@@ -2,7 +2,8 @@ import { File } from "@pierre/diffs/react";
 import { Button } from "@renderer/components/ui/button";
 import { IconSearch, IconX } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SEARCH_HIGHLIGHT_CSS, useFileSearch } from "./hooks/useFileSearch";
+import { SEARCH_HIGHLIGHT_CSS } from "@renderer/lib/find-in-text";
+import { useFileSearch } from "./hooks/useFileSearch";
 
 export function FilePreview({
   projectPath,
