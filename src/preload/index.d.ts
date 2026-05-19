@@ -95,6 +95,9 @@ export interface TerminalApi {
       signal?: number;
     }) => void,
   ) => () => void;
+  onStatusChanged: (
+    callback: (event: { terminalId: string; isWorking: boolean }) => void,
+  ) => () => void;
 }
 
 declare global {

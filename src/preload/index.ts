@@ -84,6 +84,19 @@ const api = {
 
       return () => ipcRenderer.removeListener("terminal:exit", listener);
     },
+    onStatusChanged: (
+      callback: (event: { terminalId: string; isWorking: boolean }) => void,
+    ) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        statusEvent: { terminalId: string; isWorking: boolean },
+      ): void => callback(statusEvent);
+
+      ipcRenderer.on("terminal:status-changed", listener);
+
+      return () =>
+        ipcRenderer.removeListener("terminal:status-changed", listener);
+    },
   },
 };
 

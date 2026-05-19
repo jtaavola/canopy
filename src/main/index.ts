@@ -30,8 +30,12 @@ const execFileAsync = promisify(execFile);
 
 const terminals = new Map<string, pty.IPty>();
 const terminalBuffers = new Map<string, string[]>();
+const terminalWorkingStatuses = new Map<string, boolean>();
+const terminalVisibleLines = new Map<string, string[]>();
+const terminalWorkingClearTimers = new Map<string, NodeJS.Timeout>();
 const activeTerminalsByWebContents = new Map<number, string>();
 const TERMINAL_BUFFER_CHUNK_LIMIT = 1000;
+const TERMINAL_VISIBLE_LINE_LIMIT = 200;
 
 const EXCLUDED_TREE_ENTRIES = new Set([
   ".git",
@@ -267,6 +271,108 @@ function getShell(): string {
   );
 }
 
+function emitTerminalStatusChanged(
+  terminalId: string,
+  isWorking: boolean,
+): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.webContents.isDestroyed()) {
+      window.webContents.send("terminal:status-changed", {
+        terminalId,
+        isWorking,
+      });
+    }
+  }
+}
+
+function setTerminalWorkingStatus(
+  terminalId: string,
+  isWorking: boolean,
+): void {
+  const clearTimer = terminalWorkingClearTimers.get(terminalId);
+  if (clearTimer) {
+    clearTimeout(clearTimer);
+    terminalWorkingClearTimers.delete(terminalId);
+  }
+
+  if (terminalWorkingStatuses.get(terminalId) === isWorking) return;
+
+  terminalWorkingStatuses.set(terminalId, isWorking);
+  emitTerminalStatusChanged(terminalId, isWorking);
+}
+
+function updateTerminalWorkingStatus(
+  terminalId: string,
+  isWorking: boolean,
+): void {
+  if (isWorking) {
+    setTerminalWorkingStatus(terminalId, true);
+    return;
+  }
+
+  if (terminalWorkingStatuses.get(terminalId) !== true) return;
+  if (terminalWorkingClearTimers.has(terminalId)) return;
+
+  // Pi redraws its status line while response output streams, which can make
+  // `Working...` briefly disappear from our line model. Delay clearing the
+  // status so the tree icon does not flicker during those transient redraws.
+  // If `Working...` reappears before this timer fires, setTerminalWorkingStatus
+  // clears the pending timer when it confirms/sets the working state to true.
+  terminalWorkingClearTimers.set(
+    terminalId,
+    setTimeout(() => {
+      terminalWorkingClearTimers.delete(terminalId);
+      if (
+        !terminalVisibleLines.get(terminalId)?.join("\n").includes("Working...")
+      ) {
+        setTerminalWorkingStatus(terminalId, false);
+      }
+    }, 1000),
+  );
+}
+
+function stripAnsiControlSequences(value: string): string {
+  const escapeCharacter = String.fromCharCode(27);
+  return value.replace(
+    new RegExp(`${escapeCharacter}\\[[0-?]*[ -/]*[@-~]`, "g"),
+    "",
+  );
+}
+
+function updateTerminalWorkingStatusFromData(
+  terminalId: string,
+  data: string,
+): void {
+  const lines = terminalVisibleLines.get(terminalId) ?? [""];
+  const text = stripAnsiControlSequences(data);
+
+  for (const character of text) {
+    if (character === "\r") {
+      lines[lines.length - 1] = "";
+      continue;
+    }
+
+    if (character === "\n") {
+      lines.push("");
+      if (lines.length > TERMINAL_VISIBLE_LINE_LIMIT) lines.shift();
+      continue;
+    }
+
+    if (character === "\b" || character === "\u007f") {
+      lines[lines.length - 1] = lines[lines.length - 1].slice(0, -1);
+      continue;
+    }
+
+    lines[lines.length - 1] += character;
+  }
+
+  terminalVisibleLines.set(terminalId, lines);
+  updateTerminalWorkingStatus(
+    terminalId,
+    lines.join("\n").includes("Working..."),
+  );
+}
+
 function cleanupTerminal(terminalId: string): void {
   const terminal = terminals.get(terminalId);
 
@@ -276,6 +382,9 @@ function cleanupTerminal(terminalId: string): void {
   }
 
   terminalBuffers.delete(terminalId);
+  terminalVisibleLines.delete(terminalId);
+  setTerminalWorkingStatus(terminalId, false);
+  terminalWorkingStatuses.delete(terminalId);
 }
 
 function cleanupWebContentsTerminals(webContentsId: number): void {
@@ -1085,6 +1194,10 @@ function registerTerminalIpc(): void {
           if (event.sender.isDestroyed()) break;
           event.sender.send("terminal:data", data);
         }
+        event.sender.send("terminal:status-changed", {
+          terminalId,
+          isWorking: terminalWorkingStatuses.get(terminalId) === true,
+        });
         return;
       }
 
@@ -1099,8 +1212,11 @@ function registerTerminalIpc(): void {
 
       terminals.set(terminalId, terminal);
       terminalBuffers.set(terminalId, []);
+      terminalVisibleLines.set(terminalId, [""]);
+      setTerminalWorkingStatus(terminalId, false);
 
       terminal.onData((data) => {
+        updateTerminalWorkingStatusFromData(terminalId, data);
         const buffer = terminalBuffers.get(terminalId) ?? [];
         buffer.push(data);
         if (buffer.length > TERMINAL_BUFFER_CHUNK_LIMIT) buffer.shift();
@@ -1116,6 +1232,8 @@ function registerTerminalIpc(): void {
       terminal.onExit(({ exitCode, signal }) => {
         terminals.delete(terminalId);
         terminalBuffers.delete(terminalId);
+        terminalVisibleLines.delete(terminalId);
+        setTerminalWorkingStatus(terminalId, false);
 
         if (!event.sender.isDestroyed()) {
           event.sender.send("terminal:exit", { terminalId, exitCode, signal });
