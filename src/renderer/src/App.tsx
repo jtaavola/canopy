@@ -46,6 +46,7 @@ function ProjectManager({
   onDeleteTree,
   onRemoveProject,
   workingTerminalIds,
+  completedTerminalIds,
 }: {
   projects: readonly WorkspaceProject[];
   activeProjectId: string;
@@ -58,6 +59,7 @@ function ProjectManager({
   onDeleteTree: (projectId: string, treeId: string) => void;
   onRemoveProject: (projectId: string) => void;
   workingTerminalIds: ReadonlySet<string>;
+  completedTerminalIds: ReadonlySet<string>;
 }): React.JSX.Element {
   return (
     <aside
@@ -144,6 +146,9 @@ function ProjectManager({
                     const isWorkingTree = workingTerminalIds.has(
                       tree.worktreePath,
                     );
+                    const isCompletedTree =
+                      !isWorkingTree &&
+                      completedTerminalIds.has(tree.worktreePath);
 
                     return (
                       <li key={tree.id} className="group/tree relative mb-1">
@@ -151,7 +156,7 @@ function ProjectManager({
                           type="button"
                           variant="ghost"
                           className={cn(
-                            "h-auto w-full min-w-0 justify-start gap-2 rounded-md px-2 py-1.5 pr-8 text-left text-sm hover:text-white",
+                            "h-auto w-full min-w-0 justify-start gap-2 rounded-md px-2 py-1.5 pr-2 text-left text-sm transition-[padding] hover:text-white group-hover/tree:pr-8",
                             isActiveTree
                               ? "bg-neutral-700 text-white hover:bg-neutral-600 dark:hover:bg-neutral-600"
                               : "text-neutral-300 hover:bg-neutral-800",
@@ -182,6 +187,13 @@ function ProjectManager({
                             </span>
                           ) : null}
                         </Button>
+                        {isCompletedTree && !isBrokenTree ? (
+                          <span
+                            className="pointer-events-none absolute top-1/2 right-2 size-2 -translate-y-1/2 rounded-full bg-sky-400 transition-[right] group-hover/tree:right-8"
+                            aria-label="Work completed"
+                            title="Work completed"
+                          />
+                        ) : null}
                         <Button
                           type="button"
                           variant="ghost"
@@ -381,6 +393,10 @@ function App(): React.JSX.Element {
   const [workingTerminalIds, setWorkingTerminalIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
+  const [completedTerminalIds, setCompletedTerminalIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const activeWorktreePathRef = useRef<string | null>(null);
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects],
@@ -397,6 +413,10 @@ function App(): React.JSX.Element {
   const isActiveTreeBroken = activeTree?.status?.isBroken === true;
   const activeWorktreePath =
     activeTree && !isActiveTreeBroken ? activeTree.worktreePath : null;
+
+  useEffect(() => {
+    activeWorktreePathRef.current = activeWorktreePath;
+  }, [activeWorktreePath]);
 
   useEffect(() => {
     let isMounted = true;
@@ -458,6 +478,17 @@ function App(): React.JSX.Element {
 
         if (isWorking) nextTerminalIds.add(terminalId);
         else nextTerminalIds.delete(terminalId);
+
+        return nextTerminalIds;
+      });
+      setCompletedTerminalIds((currentTerminalIds) => {
+        const nextTerminalIds = new Set(currentTerminalIds);
+
+        if (isWorking) {
+          nextTerminalIds.delete(terminalId);
+        } else if (terminalId !== activeWorktreePathRef.current) {
+          nextTerminalIds.add(terminalId);
+        }
 
         return nextTerminalIds;
       });
@@ -549,8 +580,18 @@ function App(): React.JSX.Element {
   };
 
   const selectTree = (projectId: string, treeId: string): void => {
+    const project = projects.find((candidate) => candidate.id === projectId);
+    const tree = project?.trees.find((candidate) => candidate.id === treeId);
+
     setActiveProjectId(projectId);
     setActiveTreeId(treeId);
+    if (tree) {
+      setCompletedTerminalIds((currentTerminalIds) => {
+        const nextTerminalIds = new Set(currentTerminalIds);
+        nextTerminalIds.delete(tree.worktreePath);
+        return nextTerminalIds;
+      });
+    }
     setSelectedFilePath(null);
     setSelectedChangedFilePath(null);
   };
@@ -743,6 +784,7 @@ function App(): React.JSX.Element {
                     onDeleteTree={deleteTree}
                     onRemoveProject={removeProject}
                     workingTerminalIds={workingTerminalIds}
+                    completedTerminalIds={completedTerminalIds}
                   />
                 </ResizablePanel>
                 <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
