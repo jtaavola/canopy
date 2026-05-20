@@ -1,8 +1,7 @@
-import { PatchDiff } from "@pierre/diffs/react";
 import { Button } from "@renderer/components/ui/button";
 import { IconX } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
 import type { ChangedFile } from "../../preload/index.d";
+import { SearchableFile } from "./searchable-file";
 
 export function ChangedDiff({
   projectPath,
@@ -13,10 +12,9 @@ export function ChangedDiff({
   filePath: string;
   onClose: () => void;
 }): React.JSX.Element {
-  const [patch, setPatch] = useState<string | null>(null);
-  const [message, setMessage] = useState("Loading diff…");
-
-  useEffect(() => {
+  const [patch, setPatch] = React.useState<string | null>(null);
+  const [message, setMessage] = React.useState("Loading diff…");
+  React.useEffect(() => {
     let isMounted = true;
 
     setPatch(null);
@@ -42,37 +40,41 @@ export function ChangedDiff({
   }, [filePath, projectPath]);
 
   return (
-    <section
-      className="flex size-full min-h-0 flex-col bg-background"
-      aria-label="Changed file diff"
-    >
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
-        <span className="min-w-0 flex-1 truncate">{filePath}</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Close changed file diff and return to terminal"
-          title="Close changed file diff"
-          onClick={onClose}
-        >
-          <IconX aria-hidden="true" data-icon="inline-start" />
-        </Button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-auto bg-neutral-950">
+    <SearchableFile searchLabel="Search diff">
+      <section
+        className="flex size-full min-h-0 flex-col bg-background"
+        aria-label="Changed file diff"
+      >
+        <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
+          <span className="min-w-0 flex-1 truncate">{filePath}</span>
+          <SearchableFile.Controls />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Close changed file diff and return to terminal"
+            title="Close changed file diff"
+            onClick={onClose}
+          >
+            <IconX aria-hidden="true" data-icon="inline-start" />
+          </Button>
+        </header>
         {patch ? (
-          <PatchDiff
+          <SearchableFile.ChangedDiff
             patch={patch}
-            disableWorkerPool
-            options={{ diffStyle: "split" }}
+            className="min-h-0 flex-1 overflow-auto bg-neutral-950"
           />
         ) : (
-          <div className="p-6 text-neutral-400 text-sm">{message}</div>
+          <div className="min-h-0 flex-1 overflow-auto bg-neutral-950 p-6 text-neutral-400 text-sm">
+            {message}
+          </div>
         )}
-      </div>
-    </section>
+      </section>
+    </SearchableFile>
   );
 }
+
+import React from "react";
 
 export function ChangedFilesList({
   projectPath,
@@ -81,10 +83,10 @@ export function ChangedFilesList({
   projectPath: string;
   onOpenChangedFile: (filePath: string) => void;
 }): React.JSX.Element {
-  const [files, setFiles] = useState<readonly ChangedFile[]>([]);
-  const [message, setMessage] = useState("Loading changes…");
+  const [files, setFiles] = React.useState<readonly ChangedFile[]>([]);
+  const [message, setMessage] = React.useState("Loading changes…");
 
-  useEffect(() => {
+  React.useEffect(() => {
     let isMounted = true;
 
     const load = (): void => {

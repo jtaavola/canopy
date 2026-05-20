@@ -1,7 +1,7 @@
-import { File } from "@pierre/diffs/react";
 import { Button } from "@renderer/components/ui/button";
 import { IconX } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
+import { SearchableFile } from "./searchable-file";
 
 export function FilePreview({
   projectPath,
@@ -16,6 +16,18 @@ export function FilePreview({
     ReturnType<typeof window.api.fileTree.preview>
   > | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const renderedFile = useMemo(
+    () =>
+      preview?.status === "ok"
+        ? {
+            name: filePath,
+            contents: preview.content,
+            cacheKey: `${projectPath}:${filePath}:${preview.content.length}`,
+          }
+        : null,
+    [filePath, preview, projectPath],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -43,18 +55,6 @@ export function FilePreview({
     };
   }, [filePath, projectPath]);
 
-  const renderedFile = useMemo(
-    () =>
-      preview?.status === "ok"
-        ? {
-            name: filePath,
-            contents: preview.content,
-            cacheKey: `${projectPath}:${filePath}:${preview.content.length}`,
-          }
-        : null,
-    [filePath, preview, projectPath],
-  );
-
   let message: string | null = null;
 
   if (isLoading) message = "Loading file preview…";
@@ -71,41 +71,36 @@ export function FilePreview({
   }
 
   return (
-    <section
-      className="flex size-full min-h-0 flex-col bg-background"
-      aria-label="File preview"
-    >
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
-        <span className="min-w-0 flex-1 truncate">{filePath}</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Close file preview and return to terminal"
-          title="Close file preview"
-          onClick={onClose}
-        >
-          <IconX aria-hidden="true" data-icon="inline-start" />
-        </Button>
-      </div>
-      {message ? (
-        <div className="flex flex-1 items-center justify-center p-4 text-muted-foreground text-sm">
-          {message}
+    <SearchableFile>
+      <section
+        className="flex size-full min-h-0 flex-col bg-background"
+        aria-label="File preview"
+      >
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
+          <span className="min-w-0 flex-1 truncate">{filePath}</span>
+          <SearchableFile.Controls />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Close file preview and return to terminal"
+            title="Close file preview"
+            onClick={onClose}
+          >
+            <IconX aria-hidden="true" data-icon="inline-start" />
+          </Button>
         </div>
-      ) : renderedFile ? (
-        <div className="min-h-0 flex-1 overflow-auto bg-[#0d1117]">
-          <File
+        {message ? (
+          <div className="flex flex-1 items-center justify-center p-4 text-muted-foreground text-sm">
+            {message}
+          </div>
+        ) : renderedFile ? (
+          <SearchableFile.File
             file={renderedFile}
-            className="block min-h-full text-xs"
-            options={{
-              themeType: "dark",
-              overflow: "scroll",
-              disableFileHeader: true,
-            }}
-            disableWorkerPool
+            className="min-h-0 flex-1 overflow-auto bg-[#0d1117]"
           />
-        </div>
-      ) : null}
-    </section>
+        ) : null}
+      </section>
+    </SearchableFile>
   );
 }
