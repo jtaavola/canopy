@@ -87,11 +87,14 @@ export interface TerminalApi {
     cols: number;
     rows: number;
     cwd: string;
+    terminalId?: string;
   }) => Promise<void>;
   write: (terminalId: string, data: string) => void;
   resize: (terminalId: string, size: { cols: number; rows: number }) => void;
   dispose: (terminalId: string) => void;
-  onData: (callback: (data: string) => void) => () => void;
+  onData: (
+    callback: (event: { terminalId: string; data: string }) => void,
+  ) => () => void;
   onExit: (
     callback: (event: {
       terminalId: string;

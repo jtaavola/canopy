@@ -54,19 +54,25 @@ const api = {
       ipcRenderer.invoke("external:open", url) as Promise<boolean>,
   },
   terminal: {
-    start: (options: { cols: number; rows: number; cwd: string }) =>
-      ipcRenderer.invoke("terminal:start", options),
+    start: (options: {
+      cols: number;
+      rows: number;
+      cwd: string;
+      terminalId?: string;
+    }) => ipcRenderer.invoke("terminal:start", options),
     write: (terminalId: string, data: string) =>
       ipcRenderer.send("terminal:write", { terminalId, data }),
     resize: (terminalId: string, size: { cols: number; rows: number }) =>
       ipcRenderer.send("terminal:resize", { terminalId, ...size }),
     dispose: (terminalId: string) =>
       ipcRenderer.send("terminal:dispose", terminalId),
-    onData: (callback: (data: string) => void) => {
+    onData: (
+      callback: (event: { terminalId: string; data: string }) => void,
+    ) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: string,
-      ): void => callback(data);
+        dataEvent: { terminalId: string; data: string },
+      ): void => callback(dataEvent);
 
       ipcRenderer.on("terminal:data", listener);
 
