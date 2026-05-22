@@ -1159,7 +1159,7 @@ function registerTerminalIpc(): void {
       }
 
       const shellPath = getShell();
-      const terminal = pty.spawn(shellPath, [], {
+      const terminal = pty.spawn(shellPath, ["-l"], {
         name: "xterm-256color",
         cols: normalizeTerminalDimension(options?.cols, 80),
         rows: normalizeTerminalDimension(options?.rows, 24),
