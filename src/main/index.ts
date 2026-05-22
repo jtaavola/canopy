@@ -33,7 +33,6 @@ const terminals = new Map<string, pty.IPty>();
 const terminalBuffers = new Map<string, string[]>();
 const workingTerminalIds = new Set<string>();
 const terminalWorkingClearTimers = new Map<string, NodeJS.Timeout>();
-const activeTerminalsByWebContents = new Map<number, string>();
 const TERMINAL_BUFFER_CHUNK_LIMIT = 1000;
 const TERMINAL_WORKING_TEXT = "Working...";
 const TERMINAL_WORKING_CLEAR_DELAY_MS = 1000;
@@ -334,9 +333,7 @@ function cleanupTerminal(terminalId: string): void {
   setTerminalWorking(terminalId, false);
 }
 
-function cleanupWebContentsTerminals(webContentsId: number): void {
-  activeTerminalsByWebContents.delete(webContentsId);
-
+function cleanupWebContentsTerminals(): void {
   for (const terminalId of terminals.keys()) {
     cleanupTerminal(terminalId);
   }
@@ -1130,16 +1127,27 @@ function registerExternalLinkIpc(): void {
 function registerTerminalIpc(): void {
   ipcMain.handle(
     "terminal:start",
-    (event, options?: { cols?: unknown; rows?: unknown; cwd?: unknown }) => {
+    (
+      event,
+      options?: {
+        cols?: unknown;
+        rows?: unknown;
+        cwd?: unknown;
+        terminalId?: unknown;
+      },
+    ) => {
       if (!validateSender(event.senderFrame)) return;
 
-      const webContentsId = event.sender.id;
       const terminalId =
+        typeof options?.terminalId === "string" && options.terminalId.length > 0
+          ? options.terminalId
+          : typeof options?.cwd === "string" && options.cwd.length > 0
+            ? options.cwd
+            : os.homedir();
+      const cwd =
         typeof options?.cwd === "string" && options.cwd.length > 0
           ? options.cwd
           : os.homedir();
-
-      activeTerminalsByWebContents.set(webContentsId, terminalId);
 
       const existingTerminal = terminals.get(terminalId);
       if (existingTerminal) {
@@ -1149,7 +1157,7 @@ function registerTerminalIpc(): void {
         );
         for (const data of terminalBuffers.get(terminalId) ?? []) {
           if (event.sender.isDestroyed()) break;
-          event.sender.send("terminal:data", data);
+          event.sender.send("terminal:data", { terminalId, data });
         }
         event.sender.send("terminal:status-changed", {
           terminalId,
@@ -1163,7 +1171,7 @@ function registerTerminalIpc(): void {
         name: "xterm-256color",
         cols: normalizeTerminalDimension(options?.cols, 80),
         rows: normalizeTerminalDimension(options?.rows, 24),
-        cwd: terminalId,
+        cwd,
         env: process.env,
       });
 
@@ -1176,11 +1184,8 @@ function registerTerminalIpc(): void {
         buffer.push(data);
         if (buffer.length > TERMINAL_BUFFER_CHUNK_LIMIT) buffer.shift();
         terminalBuffers.set(terminalId, buffer);
-        if (
-          !event.sender.isDestroyed() &&
-          activeTerminalsByWebContents.get(webContentsId) === terminalId
-        ) {
-          event.sender.send("terminal:data", data);
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("terminal:data", { terminalId, data });
         }
       });
 
@@ -1256,10 +1261,8 @@ function createWindow(): void {
     },
   });
 
-  const mainWindowWebContentsId = mainWindow.webContents.id;
-
   mainWindow.on("closed", () => {
-    cleanupWebContentsTerminals(mainWindowWebContentsId);
+    cleanupWebContentsTerminals();
   });
 
   mainWindow.on("ready-to-show", () => {

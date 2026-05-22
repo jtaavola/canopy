@@ -19,15 +19,13 @@ import {
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
-import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { WorkspaceProject } from "../../preload/index.d";
 import { ChangedDiff, ChangedFilesList } from "./ChangedFiles";
 import { FilePreview } from "./FilePreview";
 import ProjectsLanding from "./ProjectsLanding";
-import "@xterm/xterm/css/xterm.css";
+import { TreeTerminal } from "./TreeTerminal";
 
 function getUserFacingErrorMessage(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -375,7 +373,6 @@ function EmptyProjectState({
 }
 
 function App(): React.JSX.Element {
-  const terminalElementRef = useRef<HTMLDivElement>(null);
   const projectManagerPanelRef = useRef<PanelImperativeHandle | null>(null);
   const projectExplorerPanelRef = useRef<PanelImperativeHandle | null>(null);
   const [projects, setProjects] = useState<readonly WorkspaceProject[]>([]);
@@ -539,78 +536,6 @@ function App(): React.JSX.Element {
       });
     });
   }, []);
-
-  useEffect(() => {
-    const terminalElement = terminalElementRef.current;
-
-    if (!terminalElement || !activeWorktreePath) return;
-
-    const terminal = new Terminal({
-      cursorBlink: true,
-      vtExtensions: {
-        kittyKeyboard: true,
-      },
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      theme: {
-        background: "#111111",
-        foreground: "#f2f2f2",
-      },
-      linkHandler: {
-        activate: (_event, text) => {
-          const confirmed = window.confirm(
-            `Do you want to navigate to ${text}?\n\nWARNING: This link could potentially be dangerous`,
-          );
-
-          if (confirmed) void window.api.external.open(text);
-        },
-      },
-    });
-    const fitAddon = new FitAddon();
-
-    terminal.loadAddon(fitAddon);
-    terminal.open(terminalElement);
-    fitAddon.fit();
-
-    const resizeShell = (): void => {
-      fitAddon.fit();
-      window.api.terminal.resize(activeWorktreePath, {
-        cols: terminal.cols,
-        rows: terminal.rows,
-      });
-    };
-
-    const resizeObserver = new ResizeObserver(resizeShell);
-    const removeDataListener = window.api.terminal.onData((data) =>
-      terminal.write(data),
-    );
-    const removeExitListener = window.api.terminal.onExit(
-      ({ terminalId, exitCode }) => {
-        if (terminalId === activeWorktreePath) {
-          terminal.writeln(`\r\n[process exited with code ${exitCode}]`);
-        }
-      },
-    );
-    const inputDisposable = terminal.onData((data) =>
-      window.api.terminal.write(activeWorktreePath, data),
-    );
-
-    resizeObserver.observe(terminalElement);
-
-    window.api.terminal.start({
-      cols: terminal.cols,
-      rows: terminal.rows,
-      cwd: activeWorktreePath,
-    });
-
-    return () => {
-      resizeObserver.disconnect();
-      inputDisposable.dispose();
-      removeDataListener();
-      removeExitListener();
-      terminal.dispose();
-    };
-  }, [activeWorktreePath]);
 
   const openProject = async (): Promise<void> => {
     setIsOpeningProject(true);
@@ -868,18 +793,18 @@ function App(): React.JSX.Element {
             >
               {activeWorktreePath ? (
                 <>
-                  <section
+                  <div
                     className={cn(
-                      "terminal-shell",
+                      "size-full",
                       (selectedFilePath || selectedChangedFilePath) && "hidden",
                     )}
-                    aria-label="Terminal"
                   >
-                    <div
-                      ref={terminalElementRef}
-                      className="terminal-container"
+                    <TreeTerminal
+                      terminalId={activeWorktreePath}
+                      cwd={activeWorktreePath}
+                      ariaLabel="Terminal"
                     />
-                  </section>
+                  </div>
                   {selectedFilePath ? (
                     <FilePreview
                       projectPath={activeWorktreePath}
@@ -946,11 +871,40 @@ function App(): React.JSX.Element {
               className="min-w-0"
             >
               {isExplorerContentVisible && activeWorktreePath ? (
-                <ProjectExplorer
-                  projectPath={activeWorktreePath}
-                  onOpenFile={openFilePreview}
-                  onOpenChangedFile={openChangedFilePreview}
-                />
+                <ResizablePanelGroup
+                  orientation="vertical"
+                  defaultLayout={{
+                    "project-explorer-files-panel": 50,
+                    "setup-terminal-panel": 50,
+                  }}
+                  className="min-h-0"
+                >
+                  <ResizablePanel
+                    id="project-explorer-files-panel"
+                    defaultSize="50%"
+                    minSize="20%"
+                    className="min-h-0"
+                  >
+                    <ProjectExplorer
+                      projectPath={activeWorktreePath}
+                      onOpenFile={openFilePreview}
+                      onOpenChangedFile={openChangedFilePreview}
+                    />
+                  </ResizablePanel>
+                  <ResizableHandle className="bg-neutral-800 after:bg-transparent hover:bg-neutral-700" />
+                  <ResizablePanel
+                    id="setup-terminal-panel"
+                    defaultSize="50%"
+                    minSize="20%"
+                    className="min-h-0"
+                  >
+                    <TreeTerminal
+                      terminalId={`setup:${activeWorktreePath}`}
+                      cwd={activeWorktreePath}
+                      ariaLabel="Setup terminal"
+                    />
+                  </ResizablePanel>
+                </ResizablePanelGroup>
               ) : null}
             </ResizablePanel>
           </ResizablePanelGroup>
