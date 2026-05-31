@@ -903,7 +903,6 @@ function App(): React.JSX.Element {
                       terminalId={`setup:${activeWorktreePath}`}
                       cwd={activeWorktreePath}
                       ariaLabel="Setup terminal"
-                      initialCommand="pi"
                     />
                   </ResizablePanel>
                 </ResizablePanelGroup>
