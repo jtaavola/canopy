@@ -1134,6 +1134,7 @@ function registerTerminalIpc(): void {
         rows?: unknown;
         cwd?: unknown;
         terminalId?: unknown;
+        initialCommand?: unknown;
       },
     ) => {
       if (!validateSender(event.senderFrame)) return;
@@ -1177,6 +1178,13 @@ function registerTerminalIpc(): void {
 
       terminals.set(terminalId, terminal);
       terminalBuffers.set(terminalId, []);
+
+      if (
+        typeof options?.initialCommand === "string" &&
+        options.initialCommand.trim().length > 0
+      ) {
+        terminal.write(`${options.initialCommand.trim()}\r`);
+      }
 
       terminal.onData((data) => {
         updateTerminalWorkingStatus(terminalId, data);

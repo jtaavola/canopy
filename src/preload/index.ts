@@ -59,6 +59,7 @@ const api = {
       rows: number;
       cwd: string;
       terminalId?: string;
+      initialCommand?: string;
     }) => ipcRenderer.invoke("terminal:start", options),
     write: (terminalId: string, data: string) =>
       ipcRenderer.send("terminal:write", { terminalId, data }),
