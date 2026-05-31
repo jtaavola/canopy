@@ -44,6 +44,22 @@ export function TreeTerminal({
 
     terminal.loadAddon(fitAddon);
     terminal.open(terminalElement);
+    terminal.attachCustomKeyEventHandler((event) => {
+      // On macOS, Cmd shortcuts should stay in Electron/Chromium instead of
+      // being encoded by xterm's kitty keyboard mode and sent to the PTY. In
+      // particular, returning false for Cmd+V lets the native paste pipeline
+      // fire xterm's paste event, matching Edit -> Paste behavior.
+      if (
+        navigator.platform.toLowerCase().includes("mac") &&
+        event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      ) {
+        return false;
+      }
+
+      return true;
+    });
     fitAddon.fit();
 
     const resizeShell = (): void => {
