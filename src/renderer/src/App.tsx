@@ -803,6 +803,7 @@ function App(): React.JSX.Element {
                       terminalId={activeWorktreePath}
                       cwd={activeWorktreePath}
                       ariaLabel="Terminal"
+                      initialCommand="pi"
                     />
                   </div>
                   {selectedFilePath ? (

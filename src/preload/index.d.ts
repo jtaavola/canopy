@@ -88,6 +88,7 @@ export interface TerminalApi {
     rows: number;
     cwd: string;
     terminalId?: string;
+    initialCommand?: string;
   }) => Promise<void>;
   write: (terminalId: string, data: string) => void;
   resize: (terminalId: string, size: { cols: number; rows: number }) => void;

@@ -7,10 +7,12 @@ export function TreeTerminal({
   terminalId,
   cwd,
   ariaLabel,
+  initialCommand,
 }: {
   terminalId: string;
   cwd: string;
   ariaLabel: string;
+  initialCommand?: string;
 }): React.JSX.Element {
   const terminalElementRef = useRef<HTMLDivElement>(null);
 
@@ -92,6 +94,7 @@ export function TreeTerminal({
       cols: terminal.cols,
       rows: terminal.rows,
       cwd,
+      initialCommand,
     });
 
     return () => {
@@ -101,7 +104,7 @@ export function TreeTerminal({
       removeExitListener();
       terminal.dispose();
     };
-  }, [cwd, terminalId]);
+  }, [cwd, initialCommand, terminalId]);
 
   return (
     <section className="terminal-shell" aria-label={ariaLabel}>
